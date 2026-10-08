@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MarketAlert;
 use App\Models\OptionSnapshot;
 use App\Models\Underlying;
+use App\Repositories\Contracts\OptionSnapshotRepositoryInterface;
 use App\Services\MarketData\MarketDataService;
 use App\Services\MarketSession\MarketSessionService;
 use Carbon\Carbon;
@@ -21,7 +22,8 @@ class OptionChainApiController extends Controller
         protected MarketDataService $marketService,
         protected OiIntelligenceEngineInterface $intelligenceEngine,
         protected AlertEngineInterface $alertEngine,
-        protected MarketSessionService $sessionService
+        protected MarketSessionService $sessionService,
+        protected OptionSnapshotRepositoryInterface $snapshotRepo
     ) {}
 
     public function live(string $symbol, Request $request): JsonResponse
@@ -96,45 +98,41 @@ class OptionChainApiController extends Controller
     }
 
     /**
-     * Get list of historical timestamps available today for timeline scrubbing
+     * Get available historical dates with snapshot counts and time spans for a symbol
      */
-    public function replayTimeline(string $symbol): JsonResponse
+    public function historicalDates(string $symbol): JsonResponse
     {
         $symbol = strtoupper($symbol);
-        $today = Carbon::today();
-
-        $rows = OptionSnapshot::query()
-            ->where('symbol', $symbol)
-            ->where('snapshot_time', '>=', $today)
-            ->select('snapshot_time', 'spot_price')
-            ->orderBy('snapshot_time', 'asc')
-            ->get()
-            ->unique(fn ($item) => $item->snapshot_time?->format('Y-m-d H:i:s'))
-            ->map(fn ($item) => [
-                'time' => $item->snapshot_time?->format('Y-m-d H:i:s'),
-                'spot' => (float) $item->spot_price,
-            ])
-            ->values();
-
-        // If no records today yet, provide recent distinct snapshot times
-        if ($rows->isEmpty()) {
-            $rows = OptionSnapshot::query()
-                ->where('symbol', $symbol)
-                ->select('snapshot_time', 'spot_price')
-                ->orderBy('snapshot_time', 'asc')
-                ->limit(200)
-                ->get()
-                ->unique(fn ($item) => $item->snapshot_time?->format('Y-m-d H:i:s'))
-                ->map(fn ($item) => [
-                    'time' => $item->snapshot_time?->format('Y-m-d H:i:s'),
-                    'spot' => (float) $item->spot_price,
-                ])
-                ->values();
-        }
+        $dates = $this->snapshotRepo->getAvailableHistoricalDates($symbol);
 
         return response()->json([
+            'status' => 'success',
             'symbol' => $symbol,
-            'timeline' => $rows,
+            'dates' => $dates,
+        ]);
+    }
+
+    /**
+     * Get list of historical timestamps available for timeline scrubbing (filtered by date)
+     */
+    public function replayTimeline(string $symbol, Request $request): JsonResponse
+    {
+        $symbol = strtoupper($symbol);
+        $dateParam = $request->query('date');
+
+        $result = $this->snapshotRepo->getTimelineForDate($symbol, $dateParam);
+
+        return response()->json([
+            'status' => 'success',
+            'symbol' => $symbol,
+            'selected_date' => $result['date'],
+            'selected_date_formatted' => $result['date_formatted'],
+            'min_time' => $result['min_time'],
+            'max_time' => $result['max_time'],
+            'min_time_24' => $result['min_time_24'],
+            'max_time_24' => $result['max_time_24'],
+            'total_points' => count($result['timeline']),
+            'timeline' => $result['timeline'],
         ]);
     }
 
@@ -148,15 +146,7 @@ class OptionChainApiController extends Controller
         $targetTime = $timeStr ? Carbon::parse($timeStr) : Carbon::now()->subMinutes(15);
         $underlying = Underlying::where('symbol', $symbol)->firstOrFail();
 
-        // Find snapshots within 30-second window of target
-        $snapshots = OptionSnapshot::query()
-            ->where('symbol', $symbol)
-            ->whereBetween('snapshot_time', [
-                $targetTime->copy()->subSeconds(25),
-                $targetTime->copy()->addSeconds(25),
-            ])
-            ->orderBy('strike_price', 'asc')
-            ->get();
+        $snapshots = $this->snapshotRepo->getSnapshotsAtTimestamp($symbol, $targetTime);
 
         if ($snapshots->isEmpty()) {
             return response()->json([
@@ -199,13 +189,22 @@ class OptionChainApiController extends Controller
 
         $expiry = $snapshots->first()->expiry_date ?: $underlying->selected_expiry;
         $analysis = $this->intelligenceEngine->processChain($underlying, $rawChain, $expiry);
+
+        $actualSnapshotTime = Carbon::parse($snapshots->first()->snapshot_time);
         $analysis['is_replay'] = true;
-        $analysis['replay_time'] = $targetTime->format('H:i:s d-M-Y');
+        $analysis['replay_time'] = $actualSnapshotTime->format('H:i:s d-M-Y');
+        $analysis['replay_time_only'] = $actualSnapshotTime->format('H:i:s');
+        $analysis['replay_date_only'] = $actualSnapshotTime->format('d-M-Y');
+        $analysis['replay_date_ymd'] = $actualSnapshotTime->format('Y-m-d');
+        $analysis['spot_price'] = $spotPrice;
 
         return response()->json([
             'status' => 'success',
             'data' => $analysis,
-            'replay_time' => $targetTime->toIso8601String(),
+            'replay_time' => $actualSnapshotTime->toIso8601String(),
+            'replay_time_only' => $actualSnapshotTime->format('H:i:s'),
+            'replay_date_only' => $actualSnapshotTime->format('d-M-Y'),
+            'replay_date_ymd' => $actualSnapshotTime->format('Y-m-d'),
         ]);
     }
 }

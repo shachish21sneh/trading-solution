@@ -133,10 +133,10 @@ class AngelOneMarketDataProvider implements MarketDataProviderInterface
             return $this->fallback->getOptionChain($symbol, $expiryDate);
         }
 
-        // Build token list for strikes around ATM (ATM ± 8 strikes)
+        // Build token list for strikes around ATM (ATM ± 15 strikes)
         $tokensToFetch = [];
         $strikeMap = [];
-        $range = 8;
+        $range = 15;
 
         for ($i = -$range; $i <= $range; $i++) {
             $strike = $atmStrike + ($i * $step);
@@ -159,87 +159,96 @@ class AngelOneMarketDataProvider implements MarketDataProviderInterface
         }
 
         try {
-            // Batch quote query up to 50 tokens
-            $response = Http::withoutVerifying()->withHeaders([
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-                'Authorization' => "Bearer {$this->jwtToken}",
-                'X-PrivateKey' => $this->apiKey,
-                'X-UserType' => 'USER',
-                'X-SourceID' => 'WEB',
-                'X-ClientLocalIP' => '127.0.0.1',
-                'X-ClientPublicIP' => env('ANGELONE_CLIENT_IP', '122.168.79.123'),
-                'X-MACAddress' => '00:00:00:00:00:00',
-            ])->timeout(8)->post("{$this->baseUrl}/rest/secure/angelbroking/market/v1/quote/", [
-                'mode' => 'FULL',
-                'exchangeTokens' => [
-                    'NFO' => $tokensToFetch,
-                ],
-            ]);
+            // Batch quote query in chunks of 50 tokens (Angel One API limit per request)
+            $tokenChunks = array_chunk($tokensToFetch, 50);
+            $fetched = [];
 
-            if ($response->successful()) {
-                $fetched = $response->json('data.fetched') ?? [];
-                if (! empty($fetched)) {
-                    $strikes = [];
+            foreach ($tokenChunks as $chunk) {
+                $response = Http::withoutVerifying()->withHeaders([
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                    'Authorization' => "Bearer {$this->jwtToken}",
+                    'X-PrivateKey' => $this->apiKey,
+                    'X-UserType' => 'USER',
+                    'X-SourceID' => 'WEB',
+                    'X-ClientLocalIP' => '127.0.0.1',
+                    'X-ClientPublicIP' => env('ANGELONE_CLIENT_IP', '122.168.79.123'),
+                    'X-MACAddress' => '00:00:00:00:00:00',
+                ])->timeout(8)->post("{$this->baseUrl}/rest/secure/angelbroking/market/v1/quote/", [
+                    'mode' => 'FULL',
+                    'exchangeTokens' => [
+                        'NFO' => $chunk,
+                    ],
+                ]);
 
-                    foreach ($fetched as $item) {
-                        $token = (string) ($item['symbolToken'] ?? '');
-                        if (! isset($strikeMap[$token])) {
-                            continue;
-                        }
+                if ($response->successful()) {
+                    $chunkFetched = $response->json('data.fetched') ?? [];
+                    if (! empty($chunkFetched)) {
+                        $fetched = array_merge($fetched, $chunkFetched);
+                    }
+                }
+            }
 
-                        $strike = $strikeMap[$token]['strike'];
-                        $type = $strikeMap[$token]['type'];
-                        $strikeKey = number_format($strike, 2, '.', '');
+            if (! empty($fetched)) {
+                $strikes = [];
 
-                        if (! isset($strikes[$strikeKey])) {
-                            $strikes[$strikeKey] = [
-                                'strike_price' => $strike,
-                                'CE' => ['oi' => 0, 'change_oi' => 0, 'volume' => 0, 'iv' => 15.0, 'ltp' => 0.0, 'change' => 0.0],
-                                'PE' => ['oi' => 0, 'change_oi' => 0, 'volume' => 0, 'iv' => 15.0, 'ltp' => 0.0, 'change' => 0.0],
-                            ];
-                        }
-
-                        $curOi = (int) ($item['opnInterest'] ?? 0);
-                        $prevOi = (int) Cache::get("angelone:prev_oi:{$token}", $curOi);
-                        $changeOi = $curOi - $prevOi;
-                        if ($changeOi === 0) {
-                            $changeOi = (int) (round($item['netChange'] ?? 0) * 150); // realistic change factor if prev_oi is same
-                        }
-
-                        $ltp = (float) ($item['ltp'] ?? 0);
-                        $netChange = (float) ($item['netChange'] ?? 0);
-                        $volume = (int) ($item['tradeVolume'] ?? 0);
-
-                        $strikes[$strikeKey][$type] = [
-                            'oi' => $curOi,
-                            'change_oi' => $changeOi,
-                            'volume' => $volume,
-                            'iv' => $this->calculateIv($spotPrice, $strike, $ltp, $type),
-                            'ltp' => $ltp,
-                            'change' => $netChange,
-                        ];
-
-                        // Cache current OI for tracking consecutive changes
-                        Cache::put("angelone:prev_oi:{$token}", $curOi, 86400);
+                foreach ($fetched as $item) {
+                    $token = (string) ($item['symbolToken'] ?? '');
+                    if (! isset($strikeMap[$token])) {
+                        continue;
                     }
 
-                    ksort($strikes);
+                    $strike = $strikeMap[$token]['strike'];
+                    $type = $strikeMap[$token]['type'];
+                    $strikeKey = number_format($strike, 2, '.', '');
 
-                    if (! empty($strikes)) {
-                        return [
-                            'symbol' => $symbol,
-                            'expiry_date' => $matchedExpiry,
-                            'spot_price' => $spotPrice,
-                            'change' => (float) ($quote['change'] ?? 0),
-                            'change_percent' => (float) ($quote['change_percent'] ?? 0),
-                            'atm_strike' => $atmStrike,
-                            'available_expiries' => $this->getExpiryDates($symbol),
-                            'timestamp' => Carbon::now('Asia/Kolkata')->toIso8601String(),
-                            'current_time_ist' => Carbon::now('Asia/Kolkata')->format('d-M-Y H:i:s').' IST',
-                            'strikes' => $strikes,
+                    if (! isset($strikes[$strikeKey])) {
+                        $strikes[$strikeKey] = [
+                            'strike_price' => $strike,
+                            'CE' => ['oi' => 0, 'change_oi' => 0, 'volume' => 0, 'iv' => 15.0, 'ltp' => 0.0, 'change' => 0.0],
+                            'PE' => ['oi' => 0, 'change_oi' => 0, 'volume' => 0, 'iv' => 15.0, 'ltp' => 0.0, 'change' => 0.0],
                         ];
                     }
+
+                    $curOi = (int) ($item['opnInterest'] ?? 0);
+                    $prevOi = (int) Cache::get("angelone:prev_oi:{$token}", $curOi);
+                    $changeOi = $curOi - $prevOi;
+                    if ($changeOi === 0) {
+                        $changeOi = (int) (round($item['netChange'] ?? 0) * 150); // realistic change factor if prev_oi is same
+                    }
+
+                    $ltp = (float) ($item['ltp'] ?? 0);
+                    $netChange = (float) ($item['netChange'] ?? 0);
+                    $volume = (int) ($item['tradeVolume'] ?? 0);
+
+                    $strikes[$strikeKey][$type] = [
+                        'oi' => $curOi,
+                        'change_oi' => $changeOi,
+                        'volume' => $volume,
+                        'iv' => $this->calculateIv($spotPrice, $strike, $ltp, $type),
+                        'ltp' => $ltp,
+                        'change' => $netChange,
+                    ];
+
+                    // Cache current OI for tracking consecutive changes
+                    Cache::put("angelone:prev_oi:{$token}", $curOi, 86400);
+                }
+
+                ksort($strikes);
+
+                if (! empty($strikes)) {
+                    return [
+                        'symbol' => $symbol,
+                        'expiry_date' => $matchedExpiry,
+                        'spot_price' => $spotPrice,
+                        'change' => (float) ($quote['change'] ?? 0),
+                        'change_percent' => (float) ($quote['change_percent'] ?? 0),
+                        'atm_strike' => $atmStrike,
+                        'available_expiries' => $this->getExpiryDates($symbol),
+                        'timestamp' => Carbon::now('Asia/Kolkata')->toIso8601String(),
+                        'current_time_ist' => Carbon::now('Asia/Kolkata')->format('d-M-Y H:i:s').' IST',
+                        'strikes' => $strikes,
+                    ];
                 }
             }
         } catch (\Throwable $e) {

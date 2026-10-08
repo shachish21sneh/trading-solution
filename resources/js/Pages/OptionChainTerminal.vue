@@ -52,6 +52,22 @@
               </option>
             </select>
           </div>
+
+          <!-- Replay Date Selector (Visible in Top Bar when in Replay Mode) -->
+          <div v-if="isReplayMode && availableDates.length" class="flex items-center space-x-2 text-xs bg-amber-950/40 border border-amber-500/40 px-2.5 py-1 rounded-xl">
+            <span class="text-amber-400 font-semibold flex items-center gap-1">
+              <span>📅</span> Date:
+            </span>
+            <select
+              :value="selectedDate"
+              @change="onReplayDateChange($event.target.value)"
+              class="bg-black/60 border border-amber-500/40 text-amber-200 text-xs rounded-lg px-2 py-0.5 focus:outline-none font-semibold font-num cursor-pointer"
+            >
+              <option v-for="d in availableDates" :key="d.date" :value="d.date">
+                {{ d.formatted_date }}{{ d.is_today ? ' (Today)' : '' }} ({{ d.distinct_timestamps }} ticks)
+              </option>
+            </select>
+          </div>
         </div>
 
         <!-- Center: Real-time Spot Ticker with Flash Animation -->
@@ -135,14 +151,19 @@
           <button
             @click="toggleReplayMode"
             :class="[
-              'px-3 py-1.5 rounded-lg text-xs font-medium transition border flex items-center gap-1.5',
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition border flex items-center gap-1.5',
               isReplayMode
                 ? 'bg-amber-500 text-black border-amber-400 font-bold shadow-md shadow-amber-500/20'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/40 hover:border-amber-400'
             ]"
           >
-            <span>⏱️</span>
-            <span>{{ isReplayMode ? 'Live Mode' : 'Time-Travel Replay' }}</span>
+            <span>{{ isReplayMode ? '🔴 Exit to Live Mode' : '⏱️ Historical Day Replay' }}</span>
+            <span
+              v-if="!isReplayMode && availableDates.length"
+              class="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/30 font-num"
+            >
+              {{ availableDates.length }} Dates
+            </span>
           </button>
 
           <!-- Pause/Play Stream Toggle (only in live mode) -->
@@ -176,22 +197,30 @@
     <!-- Market Closed / Session Notice Banner -->
     <div
       v-if="!isMarketOpen && !isReplayMode"
-      class="bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 border-b border-rose-900/30 px-4 py-2 text-xs"
+      class="bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 border-b border-rose-900/30 px-4 py-2.5 text-xs"
     >
-      <div class="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center space-x-2">
+      <div class="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center space-x-2 flex-wrap gap-y-1">
           <span class="text-rose-400 font-bold">🛑 Market Session Inactive:</span>
           <span class="text-slate-300">
             NSE Live trading stopped at 03:30 PM IST. Displaying final <strong>End-Of-Day (EOD) Closing Snapshot</strong>.
           </span>
           <span class="text-slate-400">Next session opens in <strong class="text-amber-300 font-num">{{ marketSession?.time_to_open }}</strong> ({{ marketSession?.next_open }}).</span>
         </div>
-        <div class="flex items-center space-x-3">
+
+        <div class="flex items-center space-x-2 flex-wrap gap-1.5">
+          <span class="text-amber-400 text-xs font-semibold flex items-center gap-1">
+            <span>📅</span> Historical Data Available:
+          </span>
           <button
-            @click="toggleReplayMode"
-            class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded font-semibold transition"
+            v-for="d in availableDates"
+            :key="d.date"
+            @click="launchReplayForDate(d.date)"
+            class="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 hover:text-white rounded text-xs font-medium transition flex items-center gap-1.5"
+            :title="`Replay ${d.formatted_date}: ${d.start_time} - ${d.end_time} IST (${d.distinct_timestamps} ticks)`"
           >
-            ▶ Launch Intraday Time-Travel Replay
+            <span>▶ Replay {{ d.formatted_date }}</span>
+            <span class="text-[10px] text-amber-400/80 font-mono bg-amber-950/80 px-1 rounded">{{ d.distinct_timestamps }} ticks</span>
           </button>
         </div>
       </div>
@@ -200,58 +229,191 @@
     <!-- Replay Controller Bar (When Replay Mode is Active) -->
     <div
       v-if="isReplayMode"
-      class="bg-gradient-to-r from-amber-950/30 via-slate-900 to-amber-950/30 border-b border-amber-600/40 px-4 py-3"
+      class="bg-gradient-to-r from-amber-950/40 via-[#0c1222] to-amber-950/40 border-b border-amber-500/50 px-4 py-3 shadow-xl space-y-2.5"
     >
-      <div class="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="max-w-[1700px] mx-auto space-y-2.5">
         
-        <div class="flex items-center space-x-3">
-          <span class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-            Historical Day Replay Mode
-          </span>
-          <span class="text-xs text-slate-300 font-num bg-slate-900 border border-slate-800 px-2.5 py-1 rounded">
-            Replaying At: <strong class="text-white">{{ activeReplayTime || '09:15:00 AM' }}</strong>
-          </span>
-        </div>
-
-        <!-- Slider & Timeline Scrubber -->
-        <div class="flex-1 max-w-2xl flex items-center space-x-4">
-          <span class="text-[11px] text-slate-400 font-num">09:15 AM</span>
-          <input
-            type="range"
-            min="0"
-            :max="Math.max(0, timelinePoints.length - 1)"
-            v-model.number="currentTimelineIndex"
-            @input="onTimelineScrub"
-            class="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-          />
-          <span class="text-[11px] text-slate-400 font-num">03:30 PM</span>
-        </div>
-
-        <!-- Playback Controls -->
-        <div class="flex items-center space-x-2">
-          <button
-            @click="togglePlayReplay"
-            class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded transition flex items-center gap-1"
-          >
-            <span>{{ isReplaying ? '⏸ Pause' : '▶ Play Replay' }}</span>
-          </button>
+        <!-- Row 1: Status, Date Filter Selector, Date Pills, Active Snapshot & Playback -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
           
-          <select
-            v-model.number="replaySpeed"
-            class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none"
-          >
-            <option :value="1000">Speed: 1x</option>
-            <option :value="500">Speed: 2x</option>
-            <option :value="200">Speed: 5x</option>
-          </select>
+          <!-- Left: Replay Status + Date Filter Dropdown + Date Quick Pills -->
+          <div class="flex items-center space-x-3 flex-wrap gap-y-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+              Historical Day Replay Mode
+            </span>
 
-          <button
-            @click="toggleReplayMode"
-            class="text-xs text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition"
-          >
-            Exit Replay
-          </button>
+            <!-- Primary Date Filter Dropdown -->
+            <div class="flex items-center space-x-1.5 bg-slate-900 border border-amber-500/50 px-2.5 py-1 rounded-xl shadow-inner">
+              <span class="text-xs text-amber-400 font-bold flex items-center gap-1">
+                <span>📅</span> Filter Date:
+              </span>
+              <select
+                :value="selectedDate"
+                @change="onReplayDateChange($event.target.value)"
+                class="bg-black/70 border border-slate-700 text-amber-200 text-xs font-semibold rounded-lg px-2.5 py-0.5 focus:ring-1 focus:ring-amber-400 focus:outline-none cursor-pointer"
+              >
+                <option v-for="d in availableDates" :key="d.date" :value="d.date">
+                  {{ d.display_label }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Date Switch Quick Pills -->
+            <div class="hidden sm:flex items-center space-x-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-800">
+              <button
+                v-for="d in availableDates"
+                :key="d.date"
+                @click="onReplayDateChange(d.date)"
+                :class="[
+                  'px-2 py-0.5 text-xs font-semibold rounded transition',
+                  selectedDate === d.date
+                    ? 'bg-amber-500 text-black shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ]"
+              >
+                {{ d.formatted_date }}{{ d.is_today ? ' (Today)' : '' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Center: Active Replay Time & Spot Details -->
+          <div class="flex items-center space-x-2 text-xs font-num bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl flex-wrap">
+            <span class="text-slate-400">Date:</span>
+            <strong class="text-white font-semibold">{{ activeReplayDate }}</strong>
+            <span class="text-slate-600">|</span>
+            <span class="text-slate-400">Replaying At:</span>
+            <strong class="text-amber-300 font-bold text-sm">{{ activeReplayTime || minTimelineTime24 }} IST</strong>
+            <span class="text-slate-600">|</span>
+            <span class="text-slate-400">Spot:</span>
+            <strong :class="spotChange >= 0 ? 'text-emerald-400' : 'text-rose-400'">{{ formatCurrency(spotPrice) }}</strong>
+            <span class="text-slate-600">|</span>
+            <span class="text-slate-400">Tick:</span>
+            <strong class="text-amber-400">{{ currentTimelineIndex + 1 }}</strong> / {{ timelinePoints.length }}
+          </div>
+
+          <!-- Right: Playback Controls & Speed & Exit -->
+          <div class="flex items-center space-x-2">
+            <button
+              @click="stepTimeline(-1)"
+              :disabled="currentTimelineIndex <= 0"
+              class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs rounded font-semibold transition"
+              title="Previous Snapshot"
+            >
+              ⏮ -1 Tick
+            </button>
+
+            <button
+              @click="togglePlayReplay"
+              class="px-3.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded transition flex items-center gap-1 shadow-md shadow-amber-500/20"
+            >
+              <span>{{ isReplaying ? '⏸ Pause' : '▶ Play Replay' }}</span>
+            </button>
+
+            <button
+              @click="stepTimeline(1)"
+              :disabled="currentTimelineIndex >= timelinePoints.length - 1"
+              class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs rounded font-semibold transition"
+              title="Next Snapshot"
+            >
+              +1 Tick ⏭
+            </button>
+            
+            <select
+              v-model.number="replaySpeed"
+              class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none"
+            >
+              <option :value="1000">Speed: 1x</option>
+              <option :value="500">Speed: 2x</option>
+              <option :value="200">Speed: 5x</option>
+              <option :value="100">Speed: 10x</option>
+            </select>
+
+            <button
+              @click="toggleReplayMode"
+              class="text-xs text-rose-300 hover:text-white px-2.5 py-1 rounded bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 transition font-semibold"
+            >
+              Exit Replay
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Row 2: Timeline Scrubber with Dynamic Time Bounds, Quick Jumps & Dropdown -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-800/80">
+          
+          <!-- Slider with dynamic Start & End times -->
+          <div class="flex-1 min-w-[280px] max-w-3xl flex items-center space-x-3">
+            <span class="text-[11px] text-amber-400 font-num font-semibold shrink-0 bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-800">
+              {{ minTimelineTime }}
+            </span>
+            <input
+              type="range"
+              min="0"
+              :max="Math.max(0, timelinePoints.length - 1)"
+              v-model.number="currentTimelineIndex"
+              @input="onTimelineScrub"
+              class="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+            />
+            <span class="text-[11px] text-amber-400 font-num font-semibold shrink-0 bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-800">
+              {{ maxTimelineTime }}
+            </span>
+          </div>
+
+          <!-- Quick Jump Time Presets -->
+          <div class="flex items-center space-x-1 text-xs">
+            <span class="text-[11px] text-slate-400 font-medium mr-1">Time Jumps:</span>
+            <button
+              @click="jumpTimeline('first')"
+              class="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 transition"
+              :title="`Jump to start (${minTimelineTime})`"
+            >
+              First
+            </button>
+            <button
+              @click="jumpTimeline('open')"
+              class="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 transition"
+              title="Jump to Market Open (09:15)"
+            >
+              09:15 Open
+            </button>
+            <button
+              @click="jumpTimeline('noon')"
+              class="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 transition"
+              title="Jump to Midday (12:00)"
+            >
+              12:00 Mid
+            </button>
+            <button
+              @click="jumpTimeline('close')"
+              class="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 transition"
+              title="Jump to Market Close (15:30)"
+            >
+              15:30 Close
+            </button>
+            <button
+              @click="jumpTimeline('last')"
+              class="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 transition"
+              :title="`Jump to latest (${maxTimelineTime})`"
+            >
+              Last
+            </button>
+          </div>
+
+          <!-- Direct Snapshot Timestamp Dropdown -->
+          <div v-if="timelinePoints.length > 0" class="flex items-center space-x-1.5 text-xs">
+            <span class="text-[11px] text-slate-400 font-medium">Exact Tick:</span>
+            <select
+              :value="currentTimelineIndex"
+              @change="onSelectSpecificTick($event.target.value)"
+              class="bg-slate-900 border border-slate-700 text-amber-300 font-num text-xs rounded px-2 py-0.5 focus:outline-none max-w-[190px]"
+            >
+              <option v-for="(pt, idx) in timelinePoints" :key="pt.time" :value="idx">
+                {{ pt.time_formatted || pt.time }} • ₹{{ pt.spot }}
+              </option>
+            </select>
+          </div>
+
         </div>
 
       </div>
@@ -365,22 +527,51 @@
         
         <!-- Table Top Control Bar -->
         <div class="px-5 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-[#0A101D]">
-          <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-3 flex-wrap gap-y-2">
             <span class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-              <span :class="['w-2 h-2 rounded-full', isReplayMode ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse']"></span>
+              <span :class="['w-2.5 h-2.5 rounded-full', isReplayMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500 animate-pulse']"></span>
               {{ isReplayMode ? 'Historical Option Chain Matrix (Replay)' : 'Real-Time Option Chain Matrix' }}
             </span>
-            <span class="text-xs text-slate-400 font-num bg-slate-900/90 border border-slate-800 px-3 py-1 rounded-lg flex items-center gap-2">
-              <span>📅 Date: <strong class="text-slate-200">{{ snapshotDate }}</strong></span>
+
+            <span class="text-xs text-slate-400 font-num bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-2.5 flex-wrap">
+              <!-- Date Display or Dropdown in Replay Mode -->
+              <span v-if="!isReplayMode" class="flex items-center gap-1">
+                <span>📅 Date:</span>
+                <strong class="text-slate-200 font-semibold">{{ snapshotDate }}</strong>
+              </span>
+              <div v-else class="flex items-center gap-1.5">
+                <span class="text-amber-400 font-semibold">📅 Date:</span>
+                <select
+                  :value="selectedDate"
+                  @change="onReplayDateChange($event.target.value)"
+                  class="bg-black/80 border border-amber-500/50 text-amber-200 font-bold rounded px-2 py-0.5 text-xs focus:outline-none cursor-pointer"
+                >
+                  <option v-for="d in availableDates" :key="d.date" :value="d.date">
+                    {{ d.formatted_date }}{{ d.is_today ? ' (Today)' : '' }}
+                  </option>
+                </select>
+              </div>
+
               <span class="text-slate-600">|</span>
               <span>⏰ Time: <strong class="text-amber-400 font-bold">{{ snapshotTime }}</strong></span>
+              
+              <template v-if="isReplayMode">
+                <span class="text-slate-600">|</span>
+                <span>Spot: <strong :class="spotChange >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'">{{ formatCurrency(spotPrice) }}</strong></span>
+                <span class="text-slate-600">|</span>
+                <span>Tick: <strong class="text-amber-300 font-bold">{{ currentTimelineIndex + 1 }}</strong>/{{ timelinePoints.length }}</span>
+              </template>
+
               <span class="text-slate-600">|</span>
-              <span>🎯 Expiry: <strong class="text-emerald-400">{{ formatExpiry(currentExpiry) }}</strong></span>
+              <span>🎯 Expiry: <strong class="text-emerald-400 font-semibold">{{ formatExpiry(currentExpiry) }}</strong></span>
             </span>
           </div>
 
           <div class="flex items-center space-x-3 text-xs">
-            <span class="text-slate-400">Click any row for Deep-Dive OI Analytics & ApexCharts</span>
+            <span v-if="isReplayMode" class="text-amber-400/90 font-mono text-[11px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+              ⚡ Time-Travel Replay: Click any strike for historical trajectory
+            </span>
+            <span v-else class="text-slate-400">Click any row for Deep-Dive OI Analytics & ApexCharts</span>
           </div>
         </div>
 
@@ -710,6 +901,7 @@ const props = defineProps({
   initialAlerts: Array,
   providerName: String,
   marketSession: Object,
+  availableHistoricalDates: Array,
 });
 
 // State
@@ -732,6 +924,16 @@ const handleProviderChanged = (provider) => {
 // Market Session
 const marketSession = ref(props.marketSession || props.initialAnalysis?.market_session || {});
 const isMarketOpen = computed(() => marketSession.value?.is_open ?? false);
+
+// Historical Data & Dates State
+const availableDates = ref(props.availableHistoricalDates || []);
+const selectedDate = ref(props.availableHistoricalDates?.[0]?.date || '2026-10-08');
+const activeReplayDate = ref(props.availableHistoricalDates?.[0]?.formatted_date || '08-Oct-2026');
+const activeReplayDateYmd = ref(props.availableHistoricalDates?.[0]?.date || '2026-10-08');
+const minTimelineTime = ref('09:15 AM');
+const maxTimelineTime = ref('03:30 PM');
+const minTimelineTime24 = ref('09:15:00');
+const maxTimelineTime24 = ref('15:30:00');
 
 // Replay State
 const isReplayMode = ref(false);
@@ -775,7 +977,7 @@ const levels = computed(() => liveData.value?.levels || {});
 
 const asOnTimestamp = computed(() => {
   if (isReplayMode.value) {
-    return `${activeReplayDate.value || '08-Oct-2026'} ${activeReplayTime.value || '15:30:00'} IST`;
+    return `${activeReplayDate.value || '08-Oct-2026'} ${activeReplayTime.value || minTimelineTime24.value} IST`;
   }
   if (liveData.value?.current_time_ist) {
     return liveData.value.current_time_ist;
@@ -798,7 +1000,7 @@ const snapshotDate = computed(() => {
 });
 
 const snapshotTime = computed(() => {
-  if (isReplayMode.value) return (activeReplayTime.value || '15:30:00') + ' IST';
+  if (isReplayMode.value) return (activeReplayTime.value || minTimelineTime24.value) + ' IST';
   if (liveData.value?.time_ist) return liveData.value.time_ist;
   if (marketSession.value?.time_ist) return marketSession.value.time_ist;
   if (liveData.value?.current_time_ist) {
@@ -904,17 +1106,62 @@ async function fetchAlerts() {
   }
 }
 
-function switchSymbol(symbol) {
+async function switchSymbol(symbol) {
   activeSymbol.value = symbol;
   const und = props.underlyings?.find(u => u.symbol === symbol);
   if (und && und.available_expiries && und.available_expiries.length > 0) {
     currentExpiry.value = und.available_expiries[0];
   }
+  await fetchHistoricalDates();
   if (isReplayMode.value) {
-    loadTimelineAndReplay();
+    await loadTimelineAndReplay();
   } else {
     fetchLiveData();
   }
+}
+
+async function fetchHistoricalDates() {
+  try {
+    const res = await fetch(`/api/option-chain/historical-dates/${activeSymbol.value}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.dates && json.dates.length > 0) {
+        availableDates.value = json.dates;
+        if (!availableDates.value.some(d => d.date === selectedDate.value)) {
+          selectedDate.value = json.dates[0].date;
+          activeReplayDate.value = json.dates[0].formatted_date;
+          activeReplayDateYmd.value = json.dates[0].date;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to fetch historical dates:', err);
+  }
+}
+
+async function launchReplayForDate(dateStr) {
+  selectedDate.value = dateStr;
+  const dateObj = availableDates.value.find(d => d.date === dateStr);
+  if (dateObj) {
+    activeReplayDate.value = dateObj.formatted_date;
+    activeReplayDateYmd.value = dateObj.date;
+  }
+  if (!isReplayMode.value) {
+    isReplayMode.value = true;
+    stopStreaming();
+  }
+  await loadTimelineAndReplay(dateStr);
+}
+
+async function onReplayDateChange(newDate) {
+  selectedDate.value = newDate;
+  const dateObj = availableDates.value.find(d => d.date === newDate);
+  if (dateObj) {
+    activeReplayDate.value = dateObj.formatted_date;
+    activeReplayDateYmd.value = dateObj.date;
+  }
+  stopReplayPlayback();
+  await loadTimelineAndReplay(newDate);
 }
 
 function toggleStreaming() {
@@ -945,7 +1192,10 @@ async function toggleReplayMode() {
   isReplayMode.value = !isReplayMode.value;
   if (isReplayMode.value) {
     stopStreaming();
-    await loadTimelineAndReplay();
+    if (!availableDates.value || availableDates.value.length === 0) {
+      await fetchHistoricalDates();
+    }
+    await loadTimelineAndReplay(selectedDate.value);
   } else {
     stopReplayPlayback();
     startStreaming();
@@ -953,12 +1203,29 @@ async function toggleReplayMode() {
   }
 }
 
-async function loadTimelineAndReplay() {
+async function loadTimelineAndReplay(date = null) {
+  const targetDate = date || selectedDate.value;
   try {
-    const res = await fetch(`/api/option-chain/replay-timeline/${activeSymbol.value}`);
+    loading.value = true;
+    const url = targetDate
+      ? `/api/option-chain/replay-timeline/${activeSymbol.value}?date=${targetDate}`
+      : `/api/option-chain/replay-timeline/${activeSymbol.value}`;
+    const res = await fetch(url);
     if (res.ok) {
       const json = await res.json();
       timelinePoints.value = json.timeline || [];
+      if (json.selected_date) {
+        selectedDate.value = json.selected_date;
+        activeReplayDateYmd.value = json.selected_date;
+      }
+      if (json.selected_date_formatted) {
+        activeReplayDate.value = json.selected_date_formatted;
+      }
+      minTimelineTime.value = json.min_time || '09:15 AM';
+      maxTimelineTime.value = json.max_time || '03:30 PM';
+      minTimelineTime24.value = json.min_time_24 || '09:15:00';
+      maxTimelineTime24.value = json.max_time_24 || '15:30:00';
+
       if (timelinePoints.value.length > 0) {
         currentTimelineIndex.value = 0;
         await fetchReplaySnapshot(timelinePoints.value[0].time);
@@ -966,6 +1233,8 @@ async function loadTimelineAndReplay() {
     }
   } catch (err) {
     console.error('Failed to load replay timeline:', err);
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -977,7 +1246,17 @@ async function fetchReplaySnapshot(timestamp) {
       const json = await res.json();
       if (json.data) {
         liveData.value = json.data;
-        activeReplayTime.value = new Date(timestamp).toLocaleTimeString('en-IN', { hour12: false });
+        if (json.replay_time_only) {
+          activeReplayTime.value = json.replay_time_only;
+        } else {
+          activeReplayTime.value = new Date(timestamp).toLocaleTimeString('en-IN', { hour12: false });
+        }
+        if (json.replay_date_only) {
+          activeReplayDate.value = json.replay_date_only;
+        }
+        if (json.replay_date_ymd) {
+          activeReplayDateYmd.value = json.replay_date_ymd;
+        }
       }
     }
   } catch (err) {
@@ -991,6 +1270,38 @@ function onTimelineScrub() {
   const pt = timelinePoints.value[currentTimelineIndex.value];
   if (pt) {
     fetchReplaySnapshot(pt.time);
+  }
+}
+
+function onSelectSpecificTick(index) {
+  currentTimelineIndex.value = Number(index);
+  onTimelineScrub();
+}
+
+function jumpTimeline(target) {
+  if (!timelinePoints.value.length) return;
+  if (target === 'first') {
+    currentTimelineIndex.value = 0;
+  } else if (target === 'last') {
+    currentTimelineIndex.value = timelinePoints.value.length - 1;
+  } else if (target === 'open') {
+    const idx = timelinePoints.value.findIndex(p => p.time.includes('09:15') || p.time >= `${selectedDate.value} 09:15:00`);
+    currentTimelineIndex.value = idx !== -1 ? idx : 0;
+  } else if (target === 'noon') {
+    const idx = timelinePoints.value.findIndex(p => p.time.includes('12:00') || p.time >= `${selectedDate.value} 12:00:00`);
+    currentTimelineIndex.value = idx !== -1 ? idx : Math.floor(timelinePoints.value.length / 2);
+  } else if (target === 'close') {
+    const idx = timelinePoints.value.findLastIndex(p => p.time <= `${selectedDate.value} 15:30:00`);
+    currentTimelineIndex.value = idx !== -1 ? idx : timelinePoints.value.length - 1;
+  }
+  onTimelineScrub();
+}
+
+function stepTimeline(delta) {
+  const newIndex = currentTimelineIndex.value + delta;
+  if (newIndex >= 0 && newIndex < timelinePoints.value.length) {
+    currentTimelineIndex.value = newIndex;
+    onTimelineScrub();
   }
 }
 
@@ -1031,7 +1342,7 @@ function openStrikeModal(row) {
   isModalOpen.value = true;
 }
 
-onMounted(() => {
+onMounted(async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const brokerConnected = urlParams.get('broker_connected');
   if (brokerConnected) {
@@ -1044,6 +1355,9 @@ onMounted(() => {
       message: `🎉 Successfully connected to ${brokerConnected.toUpperCase()}! Real-time broker live stream is active.`,
       detected_at: new Date().toLocaleTimeString(),
     });
+  }
+  if (!availableDates.value || availableDates.value.length === 0) {
+    await fetchHistoricalDates();
   }
   fetchLiveData();
   startStreaming();

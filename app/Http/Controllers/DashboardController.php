@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Contracts\OiIntelligenceEngineInterface;
 use App\Models\MarketAlert;
 use App\Models\Underlying;
+use App\Repositories\Contracts\OptionSnapshotRepositoryInterface;
 use App\Services\MarketData\MarketDataService;
 use App\Services\MarketSession\MarketSessionService;
 use Illuminate\Http\Request;
@@ -17,7 +18,8 @@ class DashboardController extends Controller
         Request $request,
         MarketDataService $marketService,
         OiIntelligenceEngineInterface $intelligenceEngine,
-        MarketSessionService $sessionService
+        MarketSessionService $sessionService,
+        OptionSnapshotRepositoryInterface $snapshotRepo
     ): Response {
         $underlyings = Underlying::where('is_active', true)->get();
         $selectedSymbol = strtoupper($request->query('symbol', 'NIFTY'));
@@ -40,6 +42,8 @@ class DashboardController extends Controller
             ->limit(20)
             ->get();
 
+        $availableHistoricalDates = $snapshotRepo->getAvailableHistoricalDates($activeUnderlying->symbol);
+
         return Inertia::render('OptionChainTerminal', [
             'underlyings' => $underlyings,
             'activeUnderlying' => $activeUnderlying,
@@ -48,6 +52,7 @@ class DashboardController extends Controller
             'initialAlerts' => $recentAlerts,
             'providerName' => $marketService->getActiveProvider()->getProviderName(),
             'marketSession' => $sessionStatus,
+            'availableHistoricalDates' => $availableHistoricalDates,
         ]);
     }
 }

@@ -23,6 +23,7 @@ Route::prefix('broker')->group(function () {
 Route::prefix('api/option-chain')->group(function () {
     Route::get('/live/{symbol}', [OptionChainApiController::class, 'live'])->name('api.live');
     Route::get('/history/{symbol}/{strike}', [OptionChainApiController::class, 'strikeHistory'])->name('api.history');
+    Route::get('/historical-dates/{symbol}', [OptionChainApiController::class, 'historicalDates'])->name('api.historical.dates');
     Route::get('/replay-timeline/{symbol}', [OptionChainApiController::class, 'replayTimeline'])->name('api.replay.timeline');
     Route::get('/replay/{symbol}', [OptionChainApiController::class, 'replay'])->name('api.replay');
     Route::get('/alerts/{symbol}', [OptionChainApiController::class, 'alerts'])->name('api.alerts');
