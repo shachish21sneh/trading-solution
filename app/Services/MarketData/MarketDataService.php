@@ -3,6 +3,7 @@
 namespace App\Services\MarketData;
 
 use App\Contracts\MarketDataProviderInterface;
+use App\Services\MarketData\Providers\AngelOneMarketDataProvider;
 use App\Services\MarketData\Providers\KiteConnectProvider;
 use App\Services\MarketData\Providers\SimulatedLiveMarketDataProvider;
 use App\Services\MarketData\Providers\UpstoxMarketDataProvider;
@@ -17,9 +18,10 @@ class MarketDataService
         $driver = Cache::get('market_data_provider', config('marketdata.provider', env('MARKET_DATA_PROVIDER', 'simulation')));
 
         $this->provider = match (strtolower((string) $driver)) {
-            'zerodha', 'kite' => new KiteConnectProvider(),
-            'upstox' => new UpstoxMarketDataProvider(),
-            default => new SimulatedLiveMarketDataProvider(),
+            'zerodha', 'kite' => new KiteConnectProvider,
+            'upstox' => new UpstoxMarketDataProvider,
+            'angelone', 'angel' => new AngelOneMarketDataProvider,
+            default => new SimulatedLiveMarketDataProvider,
         };
     }
 
@@ -62,6 +64,11 @@ class MarketDataService
     }
 
     public function getAvailableExpiries(string $symbol): array
+    {
+        return $this->provider->getExpiryDates($symbol);
+    }
+
+    public function getExpiryDates(string $symbol): array
     {
         return $this->provider->getExpiryDates($symbol);
     }

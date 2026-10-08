@@ -52,6 +52,7 @@ class Underlying extends Model
     public function getAtmStrikeAttribute(): float
     {
         $step = $this->strike_step ?: 50;
+
         return round($this->spot_price / $step) * $step;
     }
 

@@ -19,13 +19,23 @@ class OiIntelligenceEngine implements OiIntelligenceEngineInterface
     public function processChain(Underlying $underlying, array $rawChainData, string $expiryDate): array
     {
         $spotPrice = (float) ($rawChainData['spot_price'] ?? $underlying->spot_price);
+        $spotChange = (float) ($rawChainData['change'] ?? 0);
+        $spotChangePercent = (float) ($rawChainData['change_percent'] ?? 0);
         $underlying->spot_price = $spotPrice;
         $underlying->save();
 
-        $atmStrike = $underlying->getAtmStrikeAttribute();
-        $visibleStrikes = $underlying->getVisibleStrikes(5); // 11 strikes: ATM-5 to ATM+5
+        $atmStrike = (float) ($rawChainData['atm_strike'] ?? $underlying->getAtmStrikeAttribute());
         $allStrikesData = $rawChainData['strikes'] ?? [];
-        $now = Carbon::now();
+
+        if (! empty($allStrikesData)) {
+            $visibleStrikes = array_map(function ($item) {
+                return (float) ($item['strike_price'] ?? 0);
+            }, array_values($allStrikesData));
+            sort($visibleStrikes);
+        } else {
+            $visibleStrikes = $underlying->getVisibleStrikes(8);
+        }
+        $now = Carbon::now('Asia/Kolkata');
 
         $processedStrikes = [];
         $snapshotsToInsert = [];
@@ -148,10 +158,10 @@ class OiIntelligenceEngine implements OiIntelligenceEngineInterface
             ];
 
             // Calculate Difference % from previous snapshot
-            $ceDiffPct = $ceAnalytic->prev_oi > 0 
+            $ceDiffPct = $ceAnalytic->prev_oi > 0
                 ? round((((int) $ceRaw['oi'] - $ceAnalytic->prev_oi) / $ceAnalytic->prev_oi) * 100, 2)
                 : 0.0;
-            $peDiffPct = $peAnalytic->prev_oi > 0 
+            $peDiffPct = $peAnalytic->prev_oi > 0
                 ? round((((int) $peRaw['oi'] - $peAnalytic->prev_oi) / $peAnalytic->prev_oi) * 100, 2)
                 : 0.0;
 
@@ -169,7 +179,7 @@ class OiIntelligenceEngine implements OiIntelligenceEngineInterface
                     'iv' => (float) $ceRaw['iv'],
                     'ltp' => (float) $ceRaw['ltp'],
                     'change' => (float) $ceRaw['change'],
-                    
+
                     // Indicators
                     'current_trend' => $ceTrend,
                     'prev_snapshot' => $ceAnalytic->prev_oi,
@@ -224,7 +234,7 @@ class OiIntelligenceEngine implements OiIntelligenceEngineInterface
         }
 
         // Save snapshots batch to database (Never overwrite history)
-        if (!empty($snapshotsToInsert)) {
+        if (! empty($snapshotsToInsert)) {
             OptionSnapshot::insert($snapshotsToInsert);
         }
 
@@ -283,9 +293,15 @@ class OiIntelligenceEngine implements OiIntelligenceEngineInterface
             'symbol' => $underlying->symbol,
             'name' => $underlying->name,
             'spot_price' => $spotPrice,
+            'spot_change' => $spotChange,
+            'spot_change_percent' => $spotChangePercent,
             'atm_strike' => $atmStrike,
             'expiry_date' => $expiryDate,
+            'available_expiries' => $rawChainData['available_expiries'] ?? $underlying->available_expiries ?? [],
             'timestamp' => $now->toIso8601String(),
+            'current_time_ist' => $now->format('d-M-Y H:i:s').' IST',
+            'date_ist' => $now->format('d-M-Y'),
+            'time_ist' => $now->format('H:i:s').' IST',
             'strikes' => $processedStrikes,
             'totals' => $totals,
             'levels' => array_merge($levels, [
@@ -369,7 +385,10 @@ class OiIntelligenceEngine implements OiIntelligenceEngineInterface
     protected function getAtmLabel(float $strike, float $atmStrike, float $step): string
     {
         $diff = round(($strike - $atmStrike) / ($step ?: 50));
-        if ($diff == 0) return 'ATM';
+        if ($diff == 0) {
+            return 'ATM';
+        }
+
         return $diff > 0 ? "ATM +{$diff}" : "ATM {$diff}";
     }
 }

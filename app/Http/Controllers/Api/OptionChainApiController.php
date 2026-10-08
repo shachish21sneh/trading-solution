@@ -36,6 +36,7 @@ class OptionChainApiController extends Controller
         $rawChain = $this->marketService->getOptionChain($symbol, $expiry);
         $analysis = $this->intelligenceEngine->processChain($underlying, $rawChain, $expiry);
         $analysis['market_session'] = $session;
+        $analysis['available_expiries'] = $this->marketService->getExpiryDates($symbol);
 
         Cache::put("options:live:analysis:{$symbol}", $analysis, 30);
 
@@ -171,7 +172,7 @@ class OptionChainApiController extends Controller
 
         foreach ($snapshots as $snap) {
             $strikeKey = number_format($snap->strike_price, 2, '.', '');
-            if (!isset($strikesRaw[$strikeKey])) {
+            if (! isset($strikesRaw[$strikeKey])) {
                 $strikesRaw[$strikeKey] = [
                     'strike_price' => $snap->strike_price,
                     'CE' => ['oi' => 0, 'change_oi' => 0, 'volume' => 0, 'iv' => 0, 'ltp' => 0, 'change' => 0],

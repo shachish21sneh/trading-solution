@@ -15,6 +15,8 @@ Route::prefix('broker')->group(function () {
     Route::get('/zerodha/callback', [BrokerAuthController::class, 'zerodhaCallback'])->name('broker.zerodha.callback');
     Route::get('/upstox/login', [BrokerAuthController::class, 'upstoxLogin'])->name('broker.upstox.login');
     Route::get('/upstox/callback', [BrokerAuthController::class, 'upstoxCallback'])->name('broker.upstox.callback');
+    Route::match(['get', 'post'], '/angelone/login', [BrokerAuthController::class, 'angeloneLogin'])->name('broker.angelone.login');
+    Route::post('/angelone/authorize', [BrokerAuthController::class, 'angeloneAuthorize'])->name('broker.angelone.authorize');
 });
 
 // Also expose API routes on web for frictionless Axios/Fetch calls in Inertia
@@ -25,4 +27,3 @@ Route::prefix('api/option-chain')->group(function () {
     Route::get('/replay/{symbol}', [OptionChainApiController::class, 'replay'])->name('api.replay');
     Route::get('/alerts/{symbol}', [OptionChainApiController::class, 'alerts'])->name('api.alerts');
 });
-

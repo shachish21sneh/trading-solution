@@ -8,8 +8,11 @@ class MarketSessionService
 {
     // NSE Standard Market Timings in IST (Asia/Kolkata)
     const MARKET_OPEN_HOUR = 9;
+
     const MARKET_OPEN_MINUTE = 15;
+
     const MARKET_CLOSE_HOUR = 15;
+
     const MARKET_CLOSE_MINUTE = 30;
 
     /**
@@ -23,7 +26,7 @@ class MarketSessionService
             Carbon::TUESDAY,
             Carbon::WEDNESDAY,
             Carbon::THURSDAY,
-            Carbon::FRIDAY
+            Carbon::FRIDAY,
         ]);
 
         $marketOpenToday = $now->copy()->setTime(self::MARKET_OPEN_HOUR, self::MARKET_OPEN_MINUTE, 0);
@@ -47,15 +50,18 @@ class MarketSessionService
             'is_open' => $isOpen,
             'is_pre_open' => $isPreOpen,
             'status' => $isOpen ? 'OPEN' : ($isPreOpen ? 'PRE_OPEN' : 'CLOSED'),
-            'current_time_ist' => $now->format('H:i:s d-M-Y'),
+            'current_time_ist' => $now->format('d-M-Y H:i:s').' IST',
+            'date_ist' => $now->format('d-M-Y'),
+            'time_ist' => $now->format('H:i:s').' IST',
+            'timestamp' => $now->toIso8601String(),
             'market_open_time' => '09:15:00 IST',
             'market_close_time' => '15:30:00 IST',
             'next_open' => $nextOpen->format('Y-m-d H:i:s'),
             'time_to_open' => $timeToOpen,
             'message' => $isOpen
                 ? 'Market is currently ACTIVE. Real-time broker data streaming.'
-                : ($isPreOpen 
-                    ? 'Market is in PRE-OPEN session (09:00 - 09:15 IST).' 
+                : ($isPreOpen
+                    ? 'Market is in PRE-OPEN session (09:00 - 09:15 IST).'
                     : "Market is CLOSED. Displaying End-Of-Day (EOD) Closing Snapshot. Next session opens in {$timeToOpen}."),
         ];
     }

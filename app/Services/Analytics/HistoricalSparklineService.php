@@ -4,7 +4,6 @@ namespace App\Services\Analytics;
 
 use App\Models\OptionSnapshot;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class HistoricalSparklineService
 {
@@ -34,6 +33,7 @@ class HistoricalSparklineService
                 $synth[] = (int) max(1000, $latest - ($i * 1200) + mt_rand(-$variance, $variance));
             }
             $synth[] = (int) $latest;
+
             return $synth;
         }
 

@@ -15,13 +15,14 @@ class BrokerAuthController
     public function zerodhaLogin()
     {
         $apiKey = env('KITE_API_KEY');
-        if (!$apiKey) {
+        if (! $apiKey) {
             return response()->json([
-                'error' => 'KITE_API_KEY is not set in .env. Please add your Zerodha Kite API Key first.'
+                'error' => 'KITE_API_KEY is not set in .env. Please add your Zerodha Kite API Key first.',
             ], 400);
         }
 
         $url = "https://kite.zerodha.com/connect/login?v=3&api_key={$apiKey}";
+
         return redirect()->away($url);
     }
 
@@ -33,7 +34,7 @@ class BrokerAuthController
         $requestToken = $request->query('request_token');
         $status = $request->query('status');
 
-        if ($status !== 'success' || !$requestToken) {
+        if ($status !== 'success' || ! $requestToken) {
             return response()->json([
                 'error' => 'Zerodha authorization failed or was cancelled.',
                 'details' => $request->all(),
@@ -43,14 +44,14 @@ class BrokerAuthController
         $apiKey = env('KITE_API_KEY');
         $apiSecret = env('KITE_API_SECRET');
 
-        if (!$apiKey || !$apiSecret) {
+        if (! $apiKey || ! $apiSecret) {
             return response()->json([
-                'error' => 'KITE_API_KEY or KITE_API_SECRET missing in .env'
+                'error' => 'KITE_API_KEY or KITE_API_SECRET missing in .env',
             ], 400);
         }
 
         // SHA-256 checksum: SHA256(api_key + request_token + api_secret)
-        $checksum = hash('sha256', $apiKey . $requestToken . $apiSecret);
+        $checksum = hash('sha256', $apiKey.$requestToken.$apiSecret);
 
         try {
             $response = Http::withoutVerifying()->asForm()->post('https://api.kite.trade/session/token', [
@@ -77,7 +78,8 @@ class BrokerAuthController
                 'response' => $response->json(),
             ], 400);
         } catch (\Throwable $e) {
-            Log::error('Zerodha OAuth Error: ' . $e->getMessage());
+            Log::error('Zerodha OAuth Error: '.$e->getMessage());
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -88,9 +90,9 @@ class BrokerAuthController
     public function upstoxLogin()
     {
         $apiKey = env('UPSTOX_API_KEY');
-        if (!$apiKey) {
+        if (! $apiKey) {
             return response()->json([
-                'error' => 'UPSTOX_API_KEY is not set in .env. Please add your Upstox API Key first.'
+                'error' => 'UPSTOX_API_KEY is not set in .env. Please add your Upstox API Key first.',
             ], 400);
         }
 
@@ -106,7 +108,7 @@ class BrokerAuthController
     public function upstoxCallback(Request $request)
     {
         $code = $request->query('code');
-        if (!$code) {
+        if (! $code) {
             return response()->json(['error' => 'No authorization code returned from Upstox.'], 400);
         }
 
@@ -137,9 +139,11 @@ class BrokerAuthController
             }
 
             $errorMsg = $response->json('errors.0.message') ?? $response->json('message') ?? 'Upstox authorization code expired or invalid.';
+
             return $this->renderOAuthError('Upstox Authorization Failed', $errorMsg, route('broker.upstox.login'), 'Re-Connect Upstox Now');
         } catch (\Throwable $e) {
-            Log::error('Upstox OAuth Error: ' . $e->getMessage());
+            Log::error('Upstox OAuth Error: '.$e->getMessage());
+
             return $this->renderOAuthError('Upstox Connection Error', $e->getMessage(), route('broker.upstox.login'), 'Try Connecting Again');
         }
     }
@@ -154,16 +158,26 @@ class BrokerAuthController
         return response()->json([
             'current_provider' => $currentProvider,
             'upstox' => [
-                'has_api_key' => !empty(env('UPSTOX_API_KEY')),
-                'has_api_secret' => !empty(env('UPSTOX_API_SECRET')),
-                'has_token' => !empty(Cache::get('upstox:access_token', env('UPSTOX_ACCESS_TOKEN'))),
+                'has_api_key' => ! empty(env('UPSTOX_API_KEY')),
+                'has_api_secret' => ! empty(env('UPSTOX_API_SECRET')),
+                'has_token' => ! empty(Cache::get('upstox:access_token', env('UPSTOX_ACCESS_TOKEN'))),
                 'redirect_url' => url('/broker/upstox/callback'),
             ],
             'zerodha' => [
-                'has_api_key' => !empty(env('KITE_API_KEY')),
-                'has_api_secret' => !empty(env('KITE_API_SECRET')),
-                'has_token' => !empty(Cache::get('kite:access_token', env('KITE_ACCESS_TOKEN'))),
+                'has_api_key' => ! empty(env('KITE_API_KEY')),
+                'has_api_secret' => ! empty(env('KITE_API_SECRET')),
+                'has_token' => ! empty(Cache::get('kite:access_token', env('KITE_ACCESS_TOKEN'))),
                 'redirect_url' => url('/broker/zerodha/callback'),
+            ],
+            'angelone' => [
+                'has_api_key' => ! empty(env('ANGELONE_API_KEY', env('SMARTAPI_API_KEY'))),
+                'has_client_code' => ! empty(env('ANGELONE_CLIENT_CODE', env('SMARTAPI_CLIENT_CODE'))),
+                'has_password' => ! empty(env('ANGELONE_PASSWORD', env('SMARTAPI_PASSWORD'))),
+                'has_totp_secret' => ! empty(env('ANGELONE_TOTP_SECRET', env('SMARTAPI_TOTP'))),
+                'has_token' => ! empty(Cache::get('angelone:jwt_token', env('ANGELONE_JWT_TOKEN', env('SMARTAPI_JWT_TOKEN')))),
+                'api_key' => env('ANGELONE_API_KEY', env('SMARTAPI_API_KEY', '')),
+                'client_code' => env('ANGELONE_CLIENT_CODE', env('SMARTAPI_CLIENT_CODE', '')),
+                'public_ip' => env('ANGELONE_CLIENT_IP', '122.168.79.123'),
             ],
         ]);
     }
@@ -174,9 +188,12 @@ class BrokerAuthController
     public function saveCredentials(Request $request)
     {
         $request->validate([
-            'provider' => 'required|in:upstox,zerodha,simulation',
+            'provider' => 'required|in:upstox,zerodha,angelone,simulation',
             'api_key' => 'nullable|string|max:100',
             'api_secret' => 'nullable|string|max:100',
+            'client_code' => 'nullable|string|max:100',
+            'password' => 'nullable|string|max:100',
+            'totp_secret' => 'nullable|string|max:100',
         ]);
 
         $provider = $request->input('provider');
@@ -184,6 +201,7 @@ class BrokerAuthController
         if ($provider === 'simulation') {
             Cache::forever('market_data_provider', 'simulation');
             $this->updateEnvFile('MARKET_DATA_PROVIDER', 'simulation');
+
             return response()->json(['success' => true, 'message' => 'Switched to Simulated Data Stream.']);
         }
 
@@ -194,6 +212,7 @@ class BrokerAuthController
             if ($request->filled('api_secret')) {
                 $this->updateEnvFile('UPSTOX_API_SECRET', $request->input('api_secret'));
             }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Upstox credentials saved! Now click Connect to login and authorize.',
@@ -208,6 +227,7 @@ class BrokerAuthController
             if ($request->filled('api_secret')) {
                 $this->updateEnvFile('KITE_API_SECRET', $request->input('api_secret'));
             }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Zerodha Kite credentials saved! Now click Connect to authorize with Kite.',
@@ -215,7 +235,188 @@ class BrokerAuthController
             ]);
         }
 
+        if ($provider === 'angelone') {
+            if ($request->filled('api_key')) {
+                $this->updateEnvFile('ANGELONE_API_KEY', $request->input('api_key'));
+            }
+            if ($request->filled('client_code')) {
+                $this->updateEnvFile('ANGELONE_CLIENT_CODE', $request->input('client_code'));
+            }
+            if ($request->filled('password')) {
+                $this->updateEnvFile('ANGELONE_PASSWORD', $request->input('password'));
+            }
+            if ($request->filled('totp_secret')) {
+                $this->updateEnvFile('ANGELONE_TOTP_SECRET', $request->input('totp_secret'));
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Angel One credentials saved! Now click 1-Click Connect to authenticate and generate session.',
+                'auth_url' => route('broker.angelone.login'),
+            ]);
+        }
+
         return response()->json(['error' => 'Invalid provider specified.'], 400);
+    }
+
+    /**
+     * Angel One SmartAPI 1-Click Login & Session Generator
+     */
+    public function angeloneAuthorize(Request $request)
+    {
+        $apiKey = $request->input('api_key') ?: env('ANGELONE_API_KEY', env('SMARTAPI_API_KEY'));
+        $clientCode = $request->input('client_code') ?: env('ANGELONE_CLIENT_CODE', env('SMARTAPI_CLIENT_CODE'));
+        $password = $request->input('password') ?: env('ANGELONE_PASSWORD', env('SMARTAPI_PASSWORD'));
+        $totp = $request->input('totp');
+        $totpSecret = $request->input('totp_secret') ?: env('ANGELONE_TOTP_SECRET', env('SMARTAPI_TOTP'));
+
+        if (! $apiKey || ! $clientCode || ! $password) {
+            return response()->json([
+                'success' => false,
+                'error' => 'API Key, Client Code, and Password/MPIN are required for Angel One.',
+            ], 422);
+        }
+
+        // If no direct 6-digit TOTP is provided, generate from TOTP secret
+        if (empty($totp) && ! empty($totpSecret)) {
+            $totp = $this->generateTotp($totpSecret);
+        }
+
+        if (empty($totp)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Please provide either the current 6-digit TOTP from your authenticator app or your TOTP Secret Key.',
+            ], 422);
+        }
+
+        $publicIp = env('ANGELONE_CLIENT_IP', '122.168.79.123');
+
+        try {
+            $response = Http::withoutVerifying()->withHeaders([
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+                'X-UserType' => 'USER',
+                'X-SourceID' => 'WEB',
+                'X-ClientLocalIP' => '127.0.0.1',
+                'X-ClientPublicIP' => $publicIp,
+                'X-MACAddress' => '00:00:00:00:00:00',
+                'X-PrivateKey' => $apiKey,
+            ])->post('https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword', [
+                'clientcode' => $clientCode,
+                'password' => $password,
+                'totp' => (string) $totp,
+            ]);
+
+            if ($response->successful() && $response->json('status') === true) {
+                $jwtToken = $response->json('data.jwtToken');
+                $refreshToken = $response->json('data.refreshToken');
+                $feedToken = $response->json('data.feedToken');
+
+                Cache::forever('angelone:jwt_token', $jwtToken);
+                Cache::forever('angelone:feed_token', $feedToken);
+                Cache::forever('market_data_provider', 'angelone');
+
+                $this->updateEnvFile('ANGELONE_API_KEY', $apiKey);
+                $this->updateEnvFile('ANGELONE_CLIENT_CODE', $clientCode);
+                $this->updateEnvFile('ANGELONE_PASSWORD', $password);
+                if (! empty($totpSecret)) {
+                    $this->updateEnvFile('ANGELONE_TOTP_SECRET', $totpSecret);
+                }
+                $this->updateEnvFile('ANGELONE_JWT_TOKEN', $jwtToken);
+                if ($feedToken) {
+                    $this->updateEnvFile('ANGELONE_FEED_TOKEN', $feedToken);
+                }
+                $this->updateEnvFile('MARKET_DATA_PROVIDER', 'angelone');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Angel One SmartAPI connected successfully! Live feed session active.',
+                    'jwt_token' => substr((string) $jwtToken, 0, 10).'...',
+                    'feed_token' => $feedToken ? (substr((string) $feedToken, 0, 10).'...') : null,
+                ]);
+            }
+
+            $errMsg = $response->json('message') ?? $response->json('errorcode') ?? 'Angel One authentication failed. Check credentials and TOTP.';
+
+            return response()->json([
+                'success' => false,
+                'error' => $errMsg,
+                'details' => $response->json(),
+            ], 400);
+        } catch (\Throwable $e) {
+            Log::error('Angel One Auth Exception: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Connection error: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Browser GET fallback for Angel One Login
+     */
+    public function angeloneLogin(Request $request)
+    {
+        $res = $this->angeloneAuthorize($request);
+        $data = $res->getData(true);
+
+        if (! empty($data['success'])) {
+            return redirect('/?broker_connected=angelone&token_generated=true');
+        }
+
+        return $this->renderOAuthError(
+            'Angel One Authentication',
+            $data['error'] ?? 'Authentication failed. Please verify your Client ID, MPIN, and TOTP.',
+            '/',
+            'Back to Settings'
+        );
+    }
+
+    /**
+     * Standard RFC 6238 TOTP computation from Base32 secret key
+     */
+    public function generateTotp(string $secret): string
+    {
+        $secret = strtoupper(preg_replace('/[^2-7A-Z]/', '', $secret));
+        if (empty($secret)) {
+            return '';
+        }
+
+        $base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        $base32Lookup = array_flip(str_split($base32Chars));
+
+        $binaryString = '';
+        $buffer = 0;
+        $bitsLeft = 0;
+
+        for ($i = 0; $i < strlen($secret); $i++) {
+            $char = $secret[$i];
+            if (! isset($base32Lookup[$char])) {
+                continue;
+            }
+            $buffer = ($buffer << 5) | $base32Lookup[$char];
+            $bitsLeft += 5;
+            if ($bitsLeft >= 8) {
+                $bitsLeft -= 8;
+                $binaryString .= chr(($buffer >> $bitsLeft) & 0xFF);
+            }
+        }
+
+        $timeSlice = floor(time() / 30);
+        $timeBytes = pack('N*', 0).pack('N*', $timeSlice);
+
+        $hash = hash_hmac('sha1', $timeBytes, $binaryString, true);
+        $offset = ord($hash[19]) & 0x0F;
+
+        $otp = (
+            ((ord($hash[$offset + 0]) & 0x7F) << 24) |
+            ((ord($hash[$offset + 1]) & 0xFF) << 16) |
+            ((ord($hash[$offset + 2]) & 0xFF) << 8) |
+            (ord($hash[$offset + 3]) & 0xFF)
+        ) % 1000000;
+
+        return str_pad((string) $otp, 6, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -224,7 +425,9 @@ class BrokerAuthController
     protected function updateEnvFile(string $key, string $value): void
     {
         $path = base_path('.env');
-        if (!file_exists($path)) return;
+        if (! file_exists($path)) {
+            return;
+        }
 
         $content = file_get_contents($path);
 
@@ -272,6 +475,7 @@ class BrokerAuthController
 </body>
 </html>
 HTML;
+
         return response($html, 400)->header('Content-Type', 'text/html');
     }
 

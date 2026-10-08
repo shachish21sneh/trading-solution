@@ -21,8 +21,8 @@ class DashboardController extends Controller
     ): Response {
         $underlyings = Underlying::where('is_active', true)->get();
         $selectedSymbol = strtoupper($request->query('symbol', 'NIFTY'));
-        
-        $activeUnderlying = $underlyings->firstWhere('symbol', $selectedSymbol) 
+
+        $activeUnderlying = $underlyings->firstWhere('symbol', $selectedSymbol)
             ?: $underlyings->first();
 
         $selectedExpiry = $request->query('expiry', $activeUnderlying->selected_expiry ?: ($activeUnderlying->available_expiries[0] ?? now()->format('Y-m-d')));
@@ -33,6 +33,7 @@ class DashboardController extends Controller
 
         $sessionStatus = $sessionService->getSessionStatus();
         $analysis['market_session'] = $sessionStatus;
+        $analysis['available_expiries'] = $marketService->getExpiryDates($activeUnderlying->symbol);
 
         $recentAlerts = MarketAlert::where('symbol', $activeUnderlying->symbol)
             ->latest('id')

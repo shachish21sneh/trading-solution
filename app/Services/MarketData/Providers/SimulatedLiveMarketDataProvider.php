@@ -10,19 +10,19 @@ class SimulatedLiveMarketDataProvider implements MarketDataProviderInterface
 {
     protected array $baseConfig = [
         'NIFTY' => [
-            'base_spot' => 24500.0,
+            'base_spot' => 22216.0,
             'step' => 50.0,
-            'lot_size' => 50,
+            'lot_size' => 65,
             'base_oi' => 1500000,
         ],
         'BANKNIFTY' => [
-            'base_spot' => 52200.0,
+            'base_spot' => 54482.3,
             'step' => 100.0,
             'lot_size' => 15,
             'base_oi' => 850000,
         ],
         'FINNIFTY' => [
-            'base_spot' => 23800.0,
+            'base_spot' => 24613.5,
             'step' => 50.0,
             'lot_size' => 40,
             'base_oi' => 600000,
@@ -38,11 +38,11 @@ class SimulatedLiveMarketDataProvider implements MarketDataProviderInterface
     {
         $symbol = strtoupper($symbol);
         $today = Carbon::now();
-        
+
         // Next 4 Thursdays (typical NSE weekly expiry)
         $expiries = [];
         $current = $today->copy();
-        
+
         for ($i = 0; $i < 4; $i++) {
             if ($current->dayOfWeek !== Carbon::THURSDAY || $current->isPast()) {
                 $current->next(Carbon::THURSDAY);
@@ -58,7 +58,7 @@ class SimulatedLiveMarketDataProvider implements MarketDataProviderInterface
     {
         $symbol = strtoupper($symbol);
         $cacheKey = "sim:spot:{$symbol}";
-        
+
         $config = $this->baseConfig[$symbol] ?? $this->baseConfig['NIFTY'];
         $prevSpot = Cache::get($cacheKey, $config['base_spot']);
 
@@ -131,11 +131,11 @@ class SimulatedLiveMarketDataProvider implements MarketDataProviderInterface
         $distFromAtm = abs($strike - $atmStrike) / $config['step'];
         $moneynessFactor = max(0.2, 1 - ($distFromAtm * 0.07));
 
-        if (!$existing) {
+        if (! $existing) {
             // Initial seed
             $baseOi = (int) ($config['base_oi'] * $moneynessFactor * (0.8 + (mt_rand(0, 40) / 100)));
             $baseVolume = (int) ($baseOi * (0.3 + (mt_rand(0, 30) / 100)));
-            
+
             // Intrinsic + Time value for LTP
             $intrinsic = ($type === 'CE') ? max(0, $spotPrice - $strike) : max(0, $strike - $spotPrice);
             $timeValue = max(10, ($config['step'] * 1.8) * exp(-0.15 * $distFromAtm));
@@ -177,6 +177,7 @@ class SimulatedLiveMarketDataProvider implements MarketDataProviderInterface
         }
 
         Cache::put($cacheKey, $data, 3600);
+
         return $data;
     }
 }

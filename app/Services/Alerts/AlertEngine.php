@@ -21,26 +21,26 @@ class AlertEngine implements AlertEngineInterface
         $totals = $currentAnalysis['totals'];
 
         // 1. Check Support and Resistance Shift
-        if (!empty($levels['support_shift'])) {
+        if (! empty($levels['support_shift'])) {
             $alertsGenerated[] = $this->recordAlert(
                 $symbol,
                 'Support Shifted',
                 'warning',
                 "{$symbol} Support Shifted: {$levels['support_shift']}",
-                "Major Put OI shifted to strike {$levels['support_1']}. Prev Support: " . ($levels['support_2'] ?? 'N/A'),
+                "Major Put OI shifted to strike {$levels['support_1']}. Prev Support: ".($levels['support_2'] ?? 'N/A'),
                 $levels['support_1'],
                 'PE',
                 ['levels' => $levels]
             );
         }
 
-        if (!empty($levels['resistance_shift'])) {
+        if (! empty($levels['resistance_shift'])) {
             $alertsGenerated[] = $this->recordAlert(
                 $symbol,
                 'Resistance Shifted',
                 'warning',
                 "{$symbol} Resistance Shifted: {$levels['resistance_shift']}",
-                "Major Call OI shifted to strike {$levels['resistance_1']}. Prev Resistance: " . ($levels['resistance_2'] ?? 'N/A'),
+                "Major Call OI shifted to strike {$levels['resistance_1']}. Prev Resistance: ".($levels['resistance_2'] ?? 'N/A'),
                 $levels['resistance_1'],
                 'CE',
                 ['levels' => $levels]
@@ -190,7 +190,7 @@ class AlertEngine implements AlertEngineInterface
         if (Cache::has($throttleKey)) {
             // Return existing or skip redundant insert
             return MarketAlert::query()->where('symbol', $symbol)->where('alert_type', $alertType)->latest('id')->first()
-                ?? new MarketAlert();
+                ?? new MarketAlert;
         }
 
         Cache::put($throttleKey, true, 30);

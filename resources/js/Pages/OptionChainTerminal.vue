@@ -48,7 +48,7 @@
               class="bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 focus:outline-none font-num"
             >
               <option v-for="exp in availableExpiries" :key="exp" :value="exp">
-                {{ exp }}
+                {{ formatExpiry(exp) }}
               </option>
             </select>
           </div>
@@ -57,9 +57,14 @@
         <!-- Center: Real-time Spot Ticker with Flash Animation -->
         <div class="flex items-center space-x-4 bg-slate-900/70 border border-slate-800 px-4 py-1.5 rounded-xl">
           <div>
-            <span class="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
-              {{ activeSymbol }} SPOT
-            </span>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                {{ activeSymbol }} SPOT
+              </span>
+              <span class="text-[9px] font-mono text-amber-400/90 bg-amber-500/10 px-1 rounded border border-amber-500/20">
+                NSE LIVE
+              </span>
+            </div>
             <div class="flex items-baseline space-x-2">
               <span
                 :class="[
@@ -79,15 +84,21 @@
                 {{ spotChange >= 0 ? '+' : '' }}{{ spotChange.toFixed(2) }} ({{ spotChangePercent.toFixed(2) }}%)
               </span>
             </div>
+            <span class="text-[10px] text-slate-400 font-mono block -mt-0.5">
+              As on <strong class="text-amber-300 font-medium">{{ asOnTimestamp }}</strong>
+            </span>
           </div>
 
-          <div class="h-7 w-[1px] bg-slate-800"></div>
+          <div class="h-9 w-[1px] bg-slate-800"></div>
 
           <!-- ATM Strike Display -->
           <div>
             <span class="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">ATM STRIKE</span>
             <span class="text-base font-bold font-num text-amber-400">
               {{ currentAtm }}
+            </span>
+            <span class="text-[10px] text-slate-400 block font-mono">
+              Step: ±{{ props.activeUnderlying?.strike_step || 50 }}
             </span>
           </div>
         </div>
@@ -98,7 +109,7 @@
           <button
             @click="isBrokerModalOpen = true"
             class="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[11px] text-slate-300 transition group cursor-pointer shadow-sm hover:border-purple-500/60"
-            title="Configure Zerodha Kite or Upstox API credentials"
+            title="Configure Angel One, Zerodha Kite, or Upstox API credentials"
           >
             <span class="w-2 h-2 rounded-full bg-emerald-400 group-hover:scale-125 transition"></span>
             <span class="text-slate-400">Broker:</span>
@@ -332,9 +343,9 @@
 
         <!-- CARD 6: Visible Strikes Ladder Count -->
         <div class="bg-[#111827]/80 border border-slate-800 rounded-xl p-3 flex flex-col justify-between">
-          <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">VISIBLE LADDER</span>
+          <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">ACTIVE LADDER</span>
           <div class="text-xl font-bold font-num text-slate-100 my-1">
-            ATM ± 5 <span class="text-xs font-normal text-slate-400">(11 Strikes)</span>
+            ATM ± {{ Math.floor(visibleStrikes.length / 2) }} <span class="text-xs font-normal text-slate-400">({{ visibleStrikes.length }} Strikes)</span>
           </div>
           <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
             <span>{{ visibleStrikes[0]?.strike_price }}</span>
@@ -364,7 +375,7 @@
               <span class="text-slate-600">|</span>
               <span>⏰ Time: <strong class="text-amber-400 font-bold">{{ snapshotTime }}</strong></span>
               <span class="text-slate-600">|</span>
-              <span>🎯 Expiry: <strong class="text-emerald-400">{{ currentExpiry }}</strong></span>
+              <span>🎯 Expiry: <strong class="text-emerald-400">{{ formatExpiry(currentExpiry) }}</strong></span>
             </span>
           </div>
 
@@ -741,32 +752,80 @@ const spotFlashClass = ref('');
 
 // Computed Properties
 const spotPrice = computed(() => liveData.value?.spot_price || 0);
-const spotChange = computed(() => spotPrice.value - (props.activeUnderlying?.spot_price || spotPrice.value));
+
+const spotChange = computed(() => {
+  if (liveData.value?.spot_change !== undefined && liveData.value?.spot_change !== null) {
+    return Number(liveData.value.spot_change);
+  }
+  return spotPrice.value - (props.activeUnderlying?.spot_price || spotPrice.value);
+});
+
 const spotChangePercent = computed(() => {
+  if (liveData.value?.spot_change_percent !== undefined && liveData.value?.spot_change_percent !== null) {
+    return Number(liveData.value.spot_change_percent);
+  }
   const base = props.activeUnderlying?.spot_price || spotPrice.value || 1;
   return (spotChange.value / base) * 100;
 });
+
 const currentAtm = computed(() => liveData.value?.atm_strike || 0);
 const visibleStrikes = computed(() => liveData.value?.strikes || []);
 const totals = computed(() => liveData.value?.totals || {});
 const levels = computed(() => liveData.value?.levels || {});
+
+const asOnTimestamp = computed(() => {
+  if (isReplayMode.value) {
+    return `${activeReplayDate.value || '08-Oct-2026'} ${activeReplayTime.value || '15:30:00'} IST`;
+  }
+  if (liveData.value?.current_time_ist) {
+    return liveData.value.current_time_ist;
+  }
+  if (marketSession.value?.current_time_ist) {
+    return marketSession.value.current_time_ist;
+  }
+  return '08-Oct-2026 15:30:00 IST';
+});
+
 const snapshotDate = computed(() => {
-  if (isReplayMode.value) return activeReplayDate.value || '07-Oct-2026';
-  if (!liveData.value?.timestamp) return '07-Oct-2026';
-  const d = new Date(liveData.value.timestamp);
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  if (isReplayMode.value) return activeReplayDate.value || '08-Oct-2026';
+  if (liveData.value?.date_ist) return liveData.value.date_ist;
+  if (marketSession.value?.date_ist) return marketSession.value.date_ist;
+  if (liveData.value?.current_time_ist) {
+    const parts = liveData.value.current_time_ist.split(' ');
+    if (parts.length >= 2) return parts[0];
+  }
+  return '08-Oct-2026';
 });
 
 const snapshotTime = computed(() => {
   if (isReplayMode.value) return (activeReplayTime.value || '15:30:00') + ' IST';
-  if (!liveData.value?.timestamp) return 'Just now';
-  return new Date(liveData.value.timestamp).toLocaleTimeString('en-IN', { hour12: false }) + ' IST';
+  if (liveData.value?.time_ist) return liveData.value.time_ist;
+  if (marketSession.value?.time_ist) return marketSession.value.time_ist;
+  if (liveData.value?.current_time_ist) {
+    const parts = liveData.value.current_time_ist.split(' ');
+    if (parts.length >= 2) return parts[1] + (parts[2] ? ' ' + parts[2] : ' IST');
+  }
+  return '15:30:00 IST';
 });
 
 const availableExpiries = computed(() => {
+  if (liveData.value?.available_expiries && liveData.value.available_expiries.length > 0) {
+    return liveData.value.available_expiries;
+  }
   const und = props.underlyings?.find(u => u.symbol === activeSymbol.value);
   return und?.available_expiries || [currentExpiry.value];
 });
+
+function formatExpiry(dateStr) {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = monthNames[parseInt(month, 10) - 1] || month;
+    return `${day}-${m}-${year}`;
+  }
+  return dateStr;
+}
 
 const pcrSentimentColor = computed(() => {
   const pcr = totals.value?.pcr || 1.0;
@@ -986,6 +1045,7 @@ onMounted(() => {
       detected_at: new Date().toLocaleTimeString(),
     });
   }
+  fetchLiveData();
   startStreaming();
 });
 

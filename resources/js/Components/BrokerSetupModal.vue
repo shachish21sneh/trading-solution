@@ -16,7 +16,7 @@
               </span>
             </h3>
             <p class="text-xs text-slate-400">
-              Connect official Zerodha Kite or Upstox v2 API for real-time tick streaming
+              Connect official Zerodha Kite, Upstox v2, or Angel One SmartAPI for real-time tick streaming
             </p>
           </div>
         </div>
@@ -38,11 +38,24 @@
       </div>
 
       <!-- Tabs Navigation -->
-      <div class="flex border-b border-slate-800 bg-slate-900/40 px-6 pt-2">
+      <div class="flex border-b border-slate-800 bg-slate-900/40 px-6 pt-2 overflow-x-auto">
+        <button
+          @click="activeTab = 'angelone'"
+          :class="[
+            'px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2 whitespace-nowrap cursor-pointer',
+            activeTab === 'angelone'
+              ? 'border-blue-500 text-blue-400 bg-blue-500/5'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          ]"
+        >
+          <span>👼 Angel One SmartAPI</span>
+          <span class="px-1.5 py-0.2 rounded bg-blue-900/60 text-[10px] text-blue-300 border border-blue-700/50">Free API</span>
+        </button>
+
         <button
           @click="activeTab = 'upstox'"
           :class="[
-            'px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2',
+            'px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2 whitespace-nowrap cursor-pointer',
             activeTab === 'upstox'
               ? 'border-purple-500 text-purple-400 bg-purple-500/5'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -55,7 +68,7 @@
         <button
           @click="activeTab = 'zerodha'"
           :class="[
-            'px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2',
+            'px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2 whitespace-nowrap cursor-pointer',
             activeTab === 'zerodha'
               ? 'border-orange-500 text-orange-400 bg-orange-500/5'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -67,7 +80,7 @@
         <button
           @click="activeTab = 'simulation'"
           :class="[
-            'px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2',
+            'px-4 py-2.5 text-xs font-semibold border-b-2 transition flex items-center gap-2 whitespace-nowrap cursor-pointer',
             activeTab === 'simulation'
               ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -80,6 +93,106 @@
       <!-- Modal Body -->
       <div class="p-6 overflow-y-auto space-y-5 text-xs">
         
+        <!-- ANGEL ONE TAB -->
+        <div v-if="activeTab === 'angelone'" class="space-y-4">
+          <div class="p-3.5 rounded-xl bg-blue-950/20 border border-blue-800/40 text-blue-200 space-y-2">
+            <h4 class="font-bold text-blue-300 text-sm flex items-center justify-between">
+              <span>Angel One SmartAPI Setup (Free Developer Account)</span>
+              <a
+                href="https://smartapi.angelone.in"
+                target="_blank"
+                class="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition inline-flex items-center gap-1 cursor-pointer"
+              >
+                Open SmartAPI Portal ↗
+              </a>
+            </h4>
+            <ol class="list-decimal list-inside space-y-2 text-slate-300 text-xs">
+              <li>Log in to <a href="https://smartapi.angelone.in" target="_blank" class="text-blue-400 underline font-mono">smartapi.angelone.in</a> with your Angel One Client ID.</li>
+              <li>Click <strong class="text-white">"Create an App"</strong> / <strong class="text-white">"Add App"</strong>:
+                <ul class="list-disc list-inside ml-4 mt-1 space-y-1 text-slate-300">
+                  <li><strong>App Name:</strong> <span class="font-mono text-blue-300">Option Chain Pro</span></li>
+                  <li><strong>Redirect URL:</strong> <code class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-emerald-300 font-mono text-[11px] select-all">https://smartapi.angelone.in</code> <span class="text-slate-400 text-[11px]">(Angel One requires HTTPS and rejects localhost)</span></li>
+                  <li><strong>Primary Static IP:</strong> <code class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[11px] select-all">122.168.79.123</code> <span class="text-slate-400 text-[11px]">(Your current public IP)</span></li>
+                </ul>
+              </li>
+              <li>Click <strong class="text-white">"Add"</strong>, then copy your generated <strong class="text-white">API Key</strong> below.</li>
+              <li>Enter your <strong class="text-white">Client Code</strong>, <strong class="text-white">MPIN</strong>, and current <strong class="text-white">6-digit TOTP</strong> (or TOTP Secret):</li>
+            </ol>
+          </div>
+
+          <!-- Credentials Input Form -->
+          <div class="space-y-3 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1">Angel One API Key (SmartAPI Key)</label>
+                <input
+                  v-model="angelKey"
+                  type="text"
+                  placeholder="e.g. fE2o3m8X..."
+                  class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1">Client ID / Code</label>
+                <input
+                  v-model="angelClientCode"
+                  type="text"
+                  placeholder="e.g. S123456"
+                  class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono uppercase focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1">MPIN / Password</label>
+                <input
+                  v-model="angelPassword"
+                  type="password"
+                  placeholder="Enter 4-digit MPIN or SmartAPI password"
+                  class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label class="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                  <span>6-Digit TOTP or TOTP Secret</span>
+                  <span class="text-[10px] text-slate-400 font-normal">Authenticator App</span>
+                </label>
+                <input
+                  v-model="angelTotp"
+                  type="text"
+                  placeholder="Current 6-digit TOTP code or TOTP Secret key"
+                  class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-400 italic">
+              💡 Tip: If you enter your TOTP Secret Key (from Angel One TOTP QR setup), the terminal will automatically generate tokens and keep your session renewed every morning!
+            </p>
+
+            <div class="flex items-center justify-between pt-2">
+              <button
+                @click="saveCredentials('angelone')"
+                :disabled="saving || authenticating"
+                class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-lg border border-slate-700 transition cursor-pointer"
+              >
+                {{ saving ? 'Saving...' : '💾 Save to .env' }}
+              </button>
+
+              <button
+                @click="authorizeAngelOne"
+                :disabled="authenticating || saving"
+                class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-600/30 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <span>{{ authenticating ? '⏳ Authenticating...' : '🔑 1-Click Connect & Authorize' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- UPSTOX TAB -->
         <div v-if="activeTab === 'upstox'" class="space-y-4">
           <div class="p-3.5 rounded-xl bg-purple-950/20 border border-purple-800/40 text-purple-200 space-y-2">
@@ -270,12 +383,17 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'provider-changed']);
 
-const activeTab = ref('upstox');
+const activeTab = ref('angelone');
+const angelKey = ref('');
+const angelClientCode = ref('');
+const angelPassword = ref('');
+const angelTotp = ref('');
 const upstoxKey = ref('');
 const upstoxSecret = ref('');
 const zerodhaKey = ref('');
 const zerodhaSecret = ref('');
 const saving = ref(false);
+const authenticating = ref(false);
 const statusData = ref(null);
 const noticeMessage = ref('');
 const isNoticeSuccess = ref(true);
@@ -285,6 +403,21 @@ const loadStatus = async () => {
     const res = await fetch('/broker/status');
     if (res.ok) {
       statusData.value = await res.json();
+      if (statusData.value?.angelone?.api_key && !angelKey.value) {
+        angelKey.value = statusData.value.angelone.api_key;
+      }
+      if (statusData.value?.angelone?.client_code && !angelClientCode.value) {
+        angelClientCode.value = statusData.value.angelone.client_code;
+      }
+      if (!angelPassword.value) {
+        angelPassword.value = '1234';
+      }
+      if (statusData.value?.current_provider) {
+        const cur = statusData.value.current_provider.toLowerCase();
+        if (cur.includes('angel')) activeTab.value = 'angelone';
+        else if (cur.includes('upstox')) activeTab.value = 'upstox';
+        else if (cur.includes('zerodha') || cur.includes('kite')) activeTab.value = 'zerodha';
+      }
     }
   } catch (e) {
     console.error('Failed to load broker status', e);
@@ -298,8 +431,11 @@ const saveCredentials = async (provider) => {
   try {
     const payload = {
       provider,
-      api_key: provider === 'upstox' ? upstoxKey.value : (provider === 'zerodha' ? zerodhaKey.value : null),
+      api_key: provider === 'angelone' ? angelKey.value : (provider === 'upstox' ? upstoxKey.value : (provider === 'zerodha' ? zerodhaKey.value : null)),
       api_secret: provider === 'upstox' ? upstoxSecret.value : (provider === 'zerodha' ? zerodhaSecret.value : null),
+      client_code: provider === 'angelone' ? angelClientCode.value : null,
+      password: provider === 'angelone' ? angelPassword.value : null,
+      totp_secret: provider === 'angelone' ? angelTotp.value : null,
     };
 
     const res = await fetch('/broker/save-credentials', {
@@ -322,10 +458,53 @@ const saveCredentials = async (provider) => {
       isNoticeSuccess.value = false;
     }
   } catch (e) {
-    noticeMessage.value = 'Failed to save credentials.';
+    noticeMessage.value = 'Failed to save credentials: ' + e.message;
     isNoticeSuccess.value = false;
   } finally {
     saving.value = false;
+  }
+};
+
+const authorizeAngelOne = async () => {
+  authenticating.value = true;
+  noticeMessage.value = '';
+
+  try {
+    const cleanTotp = angelTotp.value?.trim() || '';
+    const isDirectDigits = /^\d{6}$/.test(cleanTotp);
+
+    const payload = {
+      api_key: angelKey.value?.trim(),
+      client_code: angelClientCode.value?.trim(),
+      password: angelPassword.value?.trim(),
+      totp: isDirectDigits ? cleanTotp : null,
+      totp_secret: !isDirectDigits ? cleanTotp : null,
+    };
+
+    const res = await fetch('/broker/angelone/authorize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      noticeMessage.value = data.message || 'Angel One SmartAPI connected successfully!';
+      isNoticeSuccess.value = true;
+      await loadStatus();
+      emit('provider-changed', 'AngelOneSmartAPI');
+    } else {
+      noticeMessage.value = data.error || 'Failed to authenticate with Angel One SmartAPI.';
+      isNoticeSuccess.value = false;
+    }
+  } catch (e) {
+    noticeMessage.value = 'Failed to authenticate with Angel One: ' + e.message;
+    isNoticeSuccess.value = false;
+  } finally {
+    authenticating.value = false;
   }
 };
 

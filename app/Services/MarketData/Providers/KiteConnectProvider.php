@@ -4,19 +4,22 @@ namespace App\Services\MarketData\Providers;
 
 use App\Contracts\MarketDataProviderInterface;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class KiteConnectProvider implements MarketDataProviderInterface
 {
     protected string $apiKey;
+
     protected string $accessToken;
+
     protected string $baseUrl = 'https://api.kite.trade';
 
     public function __construct()
     {
         $this->apiKey = config('services.zerodha.api_key', env('KITE_API_KEY', ''));
-        $this->accessToken = \Illuminate\Support\Facades\Cache::get('kite:access_token', config('services.zerodha.access_token', env('KITE_ACCESS_TOKEN', '')));
+        $this->accessToken = Cache::get('kite:access_token', config('services.zerodha.access_token', env('KITE_ACCESS_TOKEN', '')));
     }
 
     public function getProviderName(): string
@@ -36,7 +39,7 @@ class KiteConnectProvider implements MarketDataProviderInterface
     public function getUnderlyingQuote(string $symbol): array
     {
         $instrumentToken = $this->resolveInstrumentToken($symbol);
-        
+
         try {
             $response = Http::withoutVerifying()->withHeaders([
                 'X-Kite-Version' => '3',
@@ -47,6 +50,7 @@ class KiteConnectProvider implements MarketDataProviderInterface
 
             if ($response->successful()) {
                 $data = $response->json("data.{$instrumentToken}");
+
                 return [
                     'symbol' => $symbol,
                     'spot_price' => (float) ($data['last_price'] ?? 0),
@@ -55,17 +59,17 @@ class KiteConnectProvider implements MarketDataProviderInterface
                 ];
             }
         } catch (\Throwable $e) {
-            Log::error("KiteConnectProvider getUnderlyingQuote error: " . $e->getMessage());
+            Log::error('KiteConnectProvider getUnderlyingQuote error: '.$e->getMessage());
         }
 
         // Fallback to simulation adapter if broker is not connected
-        return (new SimulatedLiveMarketDataProvider())->getUnderlyingQuote($symbol);
+        return (new SimulatedLiveMarketDataProvider)->getUnderlyingQuote($symbol);
     }
 
     public function getOptionChain(string $symbol, string $expiryDate): array
     {
         // Connect to Kite API quote/instruments endpoint or fallback to simulated stream
-        return (new SimulatedLiveMarketDataProvider())->getOptionChain($symbol, $expiryDate);
+        return (new SimulatedLiveMarketDataProvider)->getOptionChain($symbol, $expiryDate);
     }
 
     protected function resolveInstrumentToken(string $symbol): string

@@ -29,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(UnderlyingRepositoryInterface::class, UnderlyingRepository::class);
 
         // Bind Services
-        $this->app->singleton(MarketDataService::class, fn () => new MarketDataService());
+        $this->app->singleton(MarketDataService::class, fn () => new MarketDataService);
         $this->app->bind(MarketDataProviderInterface::class, fn ($app) => $app->make(MarketDataService::class)->getActiveProvider());
         $this->app->singleton(OiIntelligenceEngineInterface::class, OiIntelligenceEngine::class);
         $this->app->singleton(AlertEngineInterface::class, AlertEngine::class);

@@ -36,6 +36,7 @@ class TrendDetectionService
             if ($optionType === 'CE') {
                 return 'Call Writing';
             }
+
             return 'Short Build-up';
         }
 

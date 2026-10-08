@@ -11,8 +11,11 @@ use Illuminate\Support\Facades\Log;
 class UpstoxMarketDataProvider implements MarketDataProviderInterface
 {
     protected string $apiKey;
+
     protected string $accessToken;
+
     protected string $baseUrl = 'https://api.upstox.com/v2';
+
     protected SimulatedLiveMarketDataProvider $fallback;
 
     protected array $instrumentKeys = [
@@ -25,7 +28,7 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
     {
         $this->apiKey = config('services.upstox.api_key', env('UPSTOX_API_KEY', ''));
         $this->accessToken = Cache::get('upstox:access_token', env('UPSTOX_ACCESS_TOKEN', ''));
-        $this->fallback = new SimulatedLiveMarketDataProvider();
+        $this->fallback = new SimulatedLiveMarketDataProvider;
     }
 
     public function getProviderName(): string
@@ -38,7 +41,7 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
         $symbol = strtoupper($symbol);
         $instrumentKey = $this->instrumentKeys[$symbol] ?? 'NSE_INDEX|Nifty 50';
 
-        if (!empty($this->accessToken)) {
+        if (! empty($this->accessToken)) {
             try {
                 $response = Http::withoutVerifying()->withHeaders([
                     'Accept' => 'application/json',
@@ -57,12 +60,12 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
                         ->take(5)
                         ->toArray();
 
-                    if (!empty($expiries)) {
+                    if (! empty($expiries)) {
                         return $expiries;
                     }
                 }
             } catch (\Throwable $e) {
-                Log::warning("Upstox getExpiryDates failed: " . $e->getMessage());
+                Log::warning('Upstox getExpiryDates failed: '.$e->getMessage());
             }
         }
 
@@ -74,7 +77,7 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
         $symbol = strtoupper($symbol);
         $instrumentKey = $this->instrumentKeys[$symbol] ?? 'NSE_INDEX|Nifty 50';
 
-        if (!empty($this->accessToken)) {
+        if (! empty($this->accessToken)) {
             try {
                 $response = Http::withoutVerifying()->withHeaders([
                     'Accept' => 'application/json',
@@ -101,7 +104,7 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
                     }
                 }
             } catch (\Throwable $e) {
-                Log::warning("Upstox getUnderlyingQuote failed: " . $e->getMessage());
+                Log::warning('Upstox getUnderlyingQuote failed: '.$e->getMessage());
             }
         }
 
@@ -113,7 +116,7 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
         $symbol = strtoupper($symbol);
         $instrumentKey = $this->instrumentKeys[$symbol] ?? 'NSE_INDEX|Nifty 50';
 
-        if (!empty($this->accessToken)) {
+        if (! empty($this->accessToken)) {
             try {
                 $response = Http::withoutVerifying()->withHeaders([
                     'Accept' => 'application/json',
@@ -130,9 +133,11 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
 
                     foreach ($rawStrikes as $row) {
                         $strike = (float) ($row['strike_price'] ?? 0);
-                        if ($strike <= 0) continue;
+                        if ($strike <= 0) {
+                            continue;
+                        }
 
-                        if ($spotPrice === 0.0 && !empty($row['underlying_spot_price'])) {
+                        if ($spotPrice === 0.0 && ! empty($row['underlying_spot_price'])) {
                             $spotPrice = (float) $row['underlying_spot_price'];
                         }
 
@@ -171,7 +176,7 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
                         ];
                     }
 
-                    if (!empty($strikes)) {
+                    if (! empty($strikes)) {
                         $step = ($symbol === 'BANKNIFTY') ? 100 : 50;
                         $atmStrike = round($spotPrice / $step) * $step;
 
@@ -186,7 +191,7 @@ class UpstoxMarketDataProvider implements MarketDataProviderInterface
                     }
                 }
             } catch (\Throwable $e) {
-                Log::error("Upstox getOptionChain failed: " . $e->getMessage());
+                Log::error('Upstox getOptionChain failed: '.$e->getMessage());
             }
         }
 

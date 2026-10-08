@@ -35,4 +35,25 @@ return [
         ],
     ],
 
+    'angelone' => [
+        'api_key' => env('ANGELONE_API_KEY'),
+        'client_code' => env('ANGELONE_CLIENT_CODE'),
+        'password' => env('ANGELONE_PASSWORD'),
+        'totp_secret' => env('ANGELONE_TOTP_SECRET'),
+        'jwt_token' => env('ANGELONE_JWT_TOKEN'),
+        'feed_token' => env('ANGELONE_FEED_TOKEN'),
+    ],
+
+    'upstox' => [
+        'api_key' => env('UPSTOX_API_KEY'),
+        'api_secret' => env('UPSTOX_API_SECRET'),
+        'access_token' => env('UPSTOX_ACCESS_TOKEN'),
+    ],
+
+    'zerodha' => [
+        'api_key' => env('KITE_API_KEY'),
+        'api_secret' => env('KITE_API_SECRET'),
+        'access_token' => env('KITE_ACCESS_TOKEN'),
+    ],
+
 ];

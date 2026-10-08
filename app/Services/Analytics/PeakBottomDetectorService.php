@@ -80,11 +80,11 @@ class PeakBottomDetectorService
         }
         // 3. Normal progression
         elseif ($currentOi > $prevOi) {
-            if (!$analytic->started_increasing_at) {
+            if (! $analytic->started_increasing_at) {
                 $analytic->started_increasing_at = $now;
             }
         } elseif ($currentOi < $prevOi) {
-            if (!$analytic->started_decreasing_at) {
+            if (! $analytic->started_decreasing_at) {
                 $analytic->started_decreasing_at = $now;
             }
         }

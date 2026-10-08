@@ -42,20 +42,23 @@ class StreamOptionChainCommand extends Command
             $isMarketOpen = $session['is_open'];
 
             // Handle Market Closed Hours (Outside 09:15 AM - 03:30 PM IST)
-            if (!$isMarketOpen && !$force && !$isSimulation) {
+            if (! $isMarketOpen && ! $force && ! $isSimulation) {
                 $this->warn(sprintf(
-                    "[%s] 🛑 MARKET IS CLOSED (%s). Real-time broker feed stopped.",
+                    '[%s] 🛑 MARKET IS CLOSED (%s). Real-time broker feed stopped.',
                     now('Asia/Kolkata')->format('H:i:s'),
                     $session['status']
                 ));
-                $this->line("Next live market session opens at: " . $session['next_open'] . " (" . $session['time_to_open'] . ")");
-                $this->line("Tip: Pass --force to simulate live stream during offline hours.");
+                $this->line('Next live market session opens at: '.$session['next_open'].' ('.$session['time_to_open'].')');
+                $this->line('Tip: Pass --force to simulate live stream during offline hours.');
 
                 // If runOnce requested, exit gracefully
-                if ($runOnce) break;
+                if ($runOnce) {
+                    break;
+                }
 
                 // Sleep for 30 seconds before re-checking market hours
                 sleep(30);
+
                 continue;
             }
 
@@ -66,9 +69,12 @@ class StreamOptionChainCommand extends Command
             $underlyings = $query->get();
 
             if ($underlyings->isEmpty()) {
-                $this->warn("No active underlyings found.");
-                if ($runOnce) break;
+                $this->warn('No active underlyings found.');
+                if ($runOnce) {
+                    break;
+                }
                 sleep($interval);
+
                 continue;
             }
 
@@ -96,7 +102,7 @@ class StreamOptionChainCommand extends Command
                     event(new OptionChainUpdated($underlying->symbol, $analysis));
 
                     $this->line(sprintf(
-                        "[%s] %-10s Spot: %-8.2f ATM: %-7.0f PCR: %-5.2f Sup: %-7.0f Res: %-7.0f MaxPain: %-7.0f | Saved 11 strikes",
+                        '[%s] %-10s Spot: %-8.2f ATM: %-7.0f PCR: %-5.2f Sup: %-7.0f Res: %-7.0f MaxPain: %-7.0f | Saved 11 strikes',
                         now('Asia/Kolkata')->format('H:i:s'),
                         $underlying->symbol,
                         $analysis['spot_price'],
@@ -107,7 +113,7 @@ class StreamOptionChainCommand extends Command
                         $analysis['levels']['max_pain']
                     ));
                 } catch (\Throwable $e) {
-                    $this->error("Error processing {$underlying->symbol}: " . $e->getMessage());
+                    $this->error("Error processing {$underlying->symbol}: ".$e->getMessage());
                 }
             }
 

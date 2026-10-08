@@ -21,7 +21,7 @@ class OptionChainUpdated implements ShouldBroadcastNow
     {
         return [
             new Channel("option-chain.{$this->symbol}"),
-            new Channel("option-chain.global"),
+            new Channel('option-chain.global'),
         ];
     }
 

@@ -21,7 +21,7 @@ class MarketAlertCreated implements ShouldBroadcastNow
     {
         return [
             new Channel("alerts.{$this->alert->symbol}"),
-            new Channel("alerts.global"),
+            new Channel('alerts.global'),
         ];
     }
 
